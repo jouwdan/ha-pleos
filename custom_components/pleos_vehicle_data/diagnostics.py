@@ -9,7 +9,7 @@ from .const import DOMAIN
 from .statistics import STATISTICS, statistic_id
 
 # Credentials, the VIN, the user's own vehicle name and precise coordinates.
-TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken"}
+TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken", "geocoder_key"}
 
 
 def scrub(value, secrets):
@@ -99,7 +99,7 @@ def _cars(coordinator):
 
 def _secrets(entry):
     coordinator = entry.runtime_data
-    values = [entry.data.get("client_id"), entry.data.get("client_secret"), coordinator.client.token]
+    values = [entry.data.get("client_id"), entry.data.get("client_secret"), entry.options.get("geocoder_key"), coordinator.client.token]
     for car in ((coordinator.data or {}).get("cars") or {}).values():
         values.extend(car.get("vehicle", {}).get(key) for key in ("vin", "nickname"))
     return sorted({value for value in values if isinstance(value, str) and value}, key=len, reverse=True)
