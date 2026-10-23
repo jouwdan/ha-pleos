@@ -39,7 +39,8 @@ Prefer to install manually? Follow [Install without HACS](docs/configuration.md#
 1. Sign into [Pleos Playground](https://pleos.ai/) and open the account menu → **My Vehicle Data API**. This menu is available to users in Europe.
 2. Select your manufacturer, accept the terms, choose **Get API Key**, and sign into the primary user's manufacturer account. Copy the **Client ID** and **Client Secret**. Use the personal API key; you do not need a business project or API-access approval. [Official key-generation guide](https://document.pleos.ai/en/api-reference/vehicle-data-api/getting-started/for-private-users/request-my-vehicle-api-key).
 3. In Home Assistant, open **Settings → Devices & services → Add integration → Pleos Vehicle Data**. Select the same manufacturer and enter both credentials.
-4. Open your vehicle's device page and add its entities to your dashboards or automations. Repeat setup to add another account.
+4. On **Odometer**, select only cars whose kilometre reading is incorrectly labelled as miles by Pleos. Leave empty if the units are correct or you are unsure. Home Assistant handles your normal km/miles display preference. [Odometer setup](docs/configuration.md#odometer-setup).
+5. Open your vehicle's device page and add its entities to your dashboards or automations. Repeat setup to add another account.
 
 Keep your Client Secret private. Personal keys need manual renewal when they expire; use the account entry's **⋮ → Reconfigure** menu to replace an existing key. See [key renewal](docs/troubleshooting.md#expired-or-replaced-api-keys).
 

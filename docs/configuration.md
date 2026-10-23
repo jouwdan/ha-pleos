@@ -8,6 +8,12 @@
 2. Extract it and copy `custom_components/pleos_vehicle_data` into your Home Assistant configuration directory's `custom_components` folder. The result must be `<config>/custom_components/pleos_vehicle_data/manifest.json`.
 3. Restart Home Assistant and complete [account setup](../README.md#set-up-your-account). For updates, replace that integration directory with the new release and restart.
 
+## Odometer setup
+
+After validating your API key, setup shows an **Odometer** step for the cars on that account. **Correct odometer kilometres labelled as miles** is off by default. Select only cars whose API odometer value is in kilometres but labelled miles: this makes the displayed distance about 1.61 times too high. Correctly reported kilometres and miles need no correction. Home Assistant's unit preference controls how the distance is displayed.
+
+If unsure, leave the selection empty and compare the odometer with your car's dashboard after setup. You can change the same per-car setting later under **Configure → Vehicle status**. It affects new readings only; existing history and statistics are not repaired. Clear it if Pleos fixes the underlying unit label. Accounts with no vehicles skip this step.
+
 ## Multiple accounts
 
 Each account has separate devices, readings, options, trip history and archive storage. Additional entries are named **Kia 2**, **Kia 3**, and so on; you can rename them in Home Assistant. Adding the same API key twice is rejected. To replace an existing account's credentials, use **⋮ → Reconfigure** on that entry instead of adding it again. Different keys are treated as separate accounts, even if they grant access to the same car.

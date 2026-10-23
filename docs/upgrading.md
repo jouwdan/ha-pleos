@@ -4,6 +4,12 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Odometer setup in 0.10.2
+
+New accounts now see an **Odometer** step that makes the existing per-car unit-label correction easier to find. It is off by default. This is for kilometres incorrectly labelled as miles by Pleos; Home Assistant still handles normal km/miles display conversion. See [odometer setup](configuration.md#odometer-setup).
+
+Existing accounts keep their settings and do not need setup again. The correction remains available under **Configure → Vehicle status**, and replacing an API key preserves it. Entity IDs, recorded history and odometer calculations are unchanged. Restart Home Assistant after updating.
+
 ## Retained readings and tyre units in 0.10.1
 
 **Tyre pressures** now default to **psi**, including existing sensors and last-trip pressures. Explicit entity unit choices are preserved. For **bar**, use **Unit of measurement** in the entity's settings. Home Assistant converts the displayed number along with the unit. Check numeric thresholds in automations that assumed the previous default unit. Entity IDs stay the same and existing recorded history is not rewritten.

@@ -18,6 +18,7 @@ from homeassistant.helpers.selector import (
 from .account import account_id, credential_id
 from pleos_client import ApiError, AuthError, PleosClient
 from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN
+from .data import vehicle_id
 
 KEY_FIELDS = {
     vol.Required("client_id"): TextSelector(),
@@ -35,7 +36,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not all(credentials.values()):
             return "invalid_auth"
         try:
-            await PleosClient(async_get_clientsession(self.hass), brand, **credentials).vehicles()
+            self._vehicles = await PleosClient(async_get_clientsession(self.hass), brand, **credentials).vehicles()
         except AuthError:
             return "invalid_auth"
         except ApiError as error:
@@ -53,14 +54,9 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if error := await self.validate(brand, user_input):
                 errors["base"] = error
             else:
-                data = {key: value.strip() for key, value in user_input.items()}
-                data["account_id"] = brand + "_" + uuid4().hex
-                titles = {entry.title for entry in self._async_current_entries()}
-                title, number = BRANDS[brand], 1
-                while title in titles:
-                    number += 1
-                    title = f"{BRANDS[brand]} {number}"
-                return self.async_create_entry(title=title, data=data)
+                self._setup_data = {key: value.strip() for key, value in user_input.items()}
+                self._setup_data["account_id"] = brand + "_" + uuid4().hex
+                return await self.async_step_odometer()
         schema = vol.Schema({
             vol.Required("brand"): SelectSelector(SelectSelectorConfig(
                 options=[{"value": key, "label": name} for key, name in BRANDS.items()],
@@ -69,6 +65,26 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors,
                                     description_placeholders={"pleos_url": PLEOS_URL, "key_guide_url": KEY_GUIDE_URL})
+
+    async def async_step_odometer(self, user_input=None):
+        if user_input is None and self._vehicles:
+            vehicles = {
+                vehicle_id(self._setup_data["account_id"], car["vin"]):
+                    f"{car.get('nickname') or car.get('sellname') or car.get('name') or 'Vehicle'} ({car['vin'][-6:]})"
+                for car in self._vehicles
+            }
+            return self.async_show_form(step_id="odometer", data_schema=vol.Schema({
+                vol.Required("odometer_km_vehicles", default=[]): odometer_selector(vehicles),
+            }))
+        self._abort_if_unique_id_configured()
+        titles = {entry.title for entry in self._async_current_entries()}
+        brand = self._setup_data["brand"]
+        title, number = BRANDS[brand], 1
+        while title in titles:
+            number += 1
+            title = f"{BRANDS[brand]} {number}"
+        return self.async_create_entry(title=title, data=self._setup_data,
+                                       options=user_input or {"odometer_km_vehicles": []})
 
     async def async_step_reauth(self, entry_data):
         return await self.async_step_reauth_confirm()
@@ -116,6 +132,13 @@ def minutes(maximum):
                                                unit_of_measurement="min"))
 
 
+def odometer_selector(vehicles):
+    return SelectSelector(SelectSelectorConfig(
+        options=[{"value": car_id, "label": name} for car_id, name in sorted(vehicles.items())],
+        multiple=True, mode=SelectSelectorMode.DROPDOWN,
+    ))
+
+
 class PleosOptionsFlow(config_entries.OptionsFlowWithReload):
     async def async_step_init(self, user_input=None):
         if user_input is not None:
@@ -134,10 +157,7 @@ class PleosOptionsFlow(config_entries.OptionsFlowWithReload):
                      "geocoder_key": TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                      "trip_poll_minutes": minutes(1440), "trip_events": BooleanSelector(),
                      "archive": BooleanSelector(),
-                     "odometer_km_vehicles": SelectSelector(SelectSelectorConfig(
-                         options=[{"value": car_id, "label": name} for car_id, name in sorted(vehicles.items())],
-                         multiple=True, mode=SelectSelectorMode.DROPDOWN,
-                     ))}
+                     "odometer_km_vehicles": odometer_selector(vehicles)}
         return self.async_show_form(step_id="init", data_schema=vol.Schema({
             vol.Required(name): section(vol.Schema({
                 (vol.Optional if key in ("geocoder_url", "geocoder_key") else vol.Required)(

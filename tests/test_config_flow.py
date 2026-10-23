@@ -12,10 +12,11 @@ from custom_components.pleos_vehicle_data.account import account_id, credential_
 from pleos_client import ApiError, AuthError, PleosClient
 from custom_components.pleos_vehicle_data.config_flow import PleosConfigFlow, PleosOptionsFlow
 from custom_components.pleos_vehicle_data.const import BRANDS, DOMAIN
+from custom_components.pleos_vehicle_data.coordinator import PleosCoordinator
 from custom_components.pleos_vehicle_data.data import vehicle_id
 from custom_components.pleos_vehicle_data.sensor import ConnectionSensor
 
-from support import CAR, HomeAssistantTestCase, NEW, OLD
+from support import CAR, HomeAssistantTestCase, NEW, OLD, entry, stamp
 
 
 class ConfigFlowTests(HomeAssistantTestCase):
@@ -77,6 +78,8 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(ConnectionSensor(self.coordinator).native_value, "key_required")
 
     async def test_reauth_validates_and_preserves_entry(self):
+        options = {"odometer_km_vehicles": [vehicle_id("kia", CAR["vin"])]}
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
         flow = self.flow("reauth")
         with patch.object(flow, "_get_reauth_entry", return_value=self.entry), patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])), patch.object(self.hass.config_entries, "async_schedule_reload") as reload:
             result = await flow.async_step_reauth_confirm(NEW)
@@ -84,6 +87,7 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(self.entry.data, OLD | NEW)
         self.assertEqual(self.entry.unique_id, credential_id("kia", NEW["client_id"]))
         self.assertEqual(account_id(self.entry), "kia")
+        self.assertEqual(self.entry.options, options)
         reload.assert_called_once_with(self.entry.entry_id)
 
     async def test_rejected_replacement_keeps_previous_credentials(self):
@@ -94,23 +98,67 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(self.entry.data, OLD)
 
     async def test_proactive_key_replacement(self):
+        options = {"odometer_km_vehicles": [vehicle_id("kia", CAR["vin"])]}
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
         flow = self.flow("reconfigure")
         with patch.object(flow, "_get_reconfigure_entry", return_value=self.entry), patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])), patch.object(self.hass.config_entries, "async_schedule_reload"):
             result = await flow.async_step_reconfigure(NEW)
         self.assertEqual(result["reason"], "reconfigure_successful")
         self.assertEqual(self.entry.data["client_id"], NEW["client_id"])
+        self.assertEqual(self.entry.options, options)
 
     async def test_user_flow_for_all_brands_and_secret_selector(self):
         with patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])):
             for brand in BRANDS:
                 flow = self.flow()
                 with patch.object(flow, "_abort_if_unique_id_configured"):
-                    result = await flow.async_step_user(NEW | {"brand": brand})
+                    form = await flow.async_step_user(NEW | {"brand": brand})
+                    self.assertEqual(form["step_id"], "odometer")
+                    result = await flow.async_step_odometer(form["data_schema"]({}))
                 self.assertEqual(result["type"], "create_entry")
                 self.assertEqual(result["data"]["brand"], brand)
+                self.assertEqual(result["options"], {"odometer_km_vehicles": []})
         result = await self.flow().async_step_user()
         selector = next(v for k, v in result["data_schema"].schema.items() if str(k) == "client_secret")
         self.assertEqual(selector.config["type"], "password")
+
+    async def test_setup_correction_applies_only_to_selected_car_on_first_poll(self):
+        other = CAR | {"vin": "SYNTHETIC-CAR-002"}
+        flow = self.flow()
+        with patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR, other])) as request:
+            form = await flow.async_step_user(NEW | {"brand": "kia"})
+            fields = probatio.to_field_list(form["data_schema"], custom_serializer=cv.custom_serializer)
+            choices = fields[0]["selector"]["select"]["options"]
+            self.assertEqual({choice["label"] for choice in choices},
+                             {"Example EV (AR-001)", "Example EV (AR-002)"})
+            selected = next(choice["value"] for choice in choices if choice["label"].endswith("AR-001)"))
+            with self.assertRaises(Exception):
+                form["data_schema"]({"odometer_km_vehicles": [vehicle_id("another-account", CAR["vin"])]})
+            created = await flow.async_step_odometer(form["data_schema"]({"odometer_km_vehicles": [selected]}))
+            request.assert_awaited_once()
+        new_entry = entry(created["data"])
+        self.hass.config_entries._entries[new_entry.entry_id] = new_entry
+        self.hass.config_entries.async_update_entry(new_entry, options=created["options"])
+        self.assertEqual(selected, vehicle_id(account_id(new_entry), CAR["vin"]))
+        self.assertNotIn(CAR["vin"], selected)
+        coordinator = PleosCoordinator(self.hass, new_entry, self.client)
+        self.addAsyncCleanup(coordinator.async_shutdown)
+        self.client.vehicles = AsyncMock(return_value=[CAR, other])
+        payload = {"timestamp": stamp(), "odometer": {"value": 5177.5, "unit": "mile"}}
+        self.client.get = AsyncMock(side_effect=lambda path: payload if path.endswith("/driving") else None)
+        cars = (await coordinator._async_update_data())["cars"]
+        for car_id, unit in ((selected, "km"), (vehicle_id(account_id(new_entry), other["vin"]), "mi")):
+            readings = cars[car_id]["readings"]
+            self.assertEqual(readings["driving_odometer"]["value"], 5177.5)
+            self.assertEqual(readings["driving_odometer"]["unit_of_measurement"], unit)
+            self.assertEqual(readings["driving_api"]["attributes"]["data"]["odometer"], payload["odometer"])
+
+    async def test_setup_without_vehicles_skips_odometer_step(self):
+        with patch.object(PleosClient, "vehicles", AsyncMock(return_value=[])) as request:
+            created = await self.flow().async_step_user(NEW | {"brand": "kia"})
+        self.assertEqual(created["type"], "create_entry")
+        self.assertEqual(created["options"], {"odometer_km_vehicles": []})
+        request.assert_awaited_once()
 
     async def test_options_and_limits(self):
         flow = PleosOptionsFlow()

@@ -15,6 +15,16 @@
           "client_secret": "Copy the matching Client Secret. Home Assistant saves it in its private configuration."
         }
       },
+      "odometer": {
+        "title": "Odometer",
+        "description": "Home Assistant uses your preferred distance unit (km or miles). Some cars report an odometer value in kilometres but incorrectly label it as miles, making the displayed distance about 1.61 times too high.\n\nSelect only cars with this confirmed problem. If unsure, leave the selection empty and compare the odometer with your dashboard after setup. You can change this later under **Configure → Vehicle status**.",
+        "data": {
+          "odometer_km_vehicles": "Correct odometer kilometres labelled as miles"
+        },
+        "data_description": {
+          "odometer_km_vehicles": "Leave empty for correctly reported km or miles. This corrects the API unit label before Home Assistant converts the distance; it does not choose your display unit."
+        }
+      },
       "reauth_confirm": {
         "title": "Replace your {brand} API key",
         "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",

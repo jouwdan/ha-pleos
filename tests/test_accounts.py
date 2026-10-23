@@ -26,12 +26,14 @@ from support import CAR, HomeAssistantTestCase, NEW, OLD, entry, stamp
 class AccountTests(HomeAssistantTestCase):
     async def add_account(self):
         with patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[CAR])):
-            created = await self.flow().async_step_user(NEW | {'brand': 'kia'})
+            flow = self.flow()
+            form = await flow.async_step_user(NEW | {'brand': 'kia'})
+            created = await flow.async_step_odometer(form['data_schema']({}))
         second = entry(created['data'])
         self.hass.config_entries._entries[second.entry_id] = second
         self.hass.config_entries.async_update_entry(second, title=created['title'],
                                                     unique_id=credential_id('kia', NEW['client_id']),
-                                                    options={'archive': True, 'trip_events': True})
+                                                    options=created['options'] | {'archive': True, 'trip_events': True})
         return second
 
     async def test_add_same_brand_account_and_reject_duplicate_key_including_legacy(self):
