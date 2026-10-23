@@ -64,5 +64,3 @@ Readings may stay visible when old or temporarily unavailable from Pleos. Check 
 | Compare this with Kia Uvo / Hyundai Bluelink | [kia_uvo comparison](docs/kia-uvo-comparison.md) |
 
 For a bug or feature request, [open an issue](https://github.com/jouwdan/ha-pleos/issues). Include your Home Assistant and integration versions, vehicle model, and what happened. If sharing [diagnostics](docs/troubleshooting.md#diagnostics), review them for personal information first. Never post your API credentials.
-
-Trip features, translations, diagnostics and the example dashboard contributed by [Alex (@isarrider)](https://github.com/isarrider) in [PR #5](https://github.com/jouwdan/ha-pleos/pull/5).
