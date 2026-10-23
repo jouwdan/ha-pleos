@@ -72,8 +72,8 @@
               "stale_minutes": "Older readings are marked with data_stale; they do not become unavailable.",
               "location": "Queries the location endpoint and exposes its data. A map tracker is created only for valid WGS84 coordinates.",
               "odometer_km_vehicles": "Select only cars whose API odometer value is in kilometres but labelled miles. Home Assistant will then convert it to your preferred display unit. Leave empty for correctly reported units. This affects new readings only; existing history and statistics are not repaired. Clear the selection if Pleos fixes the underlying data.",
-              "reverse_geocode": "Resolve valid GPS coordinates to a human-readable address. Requires location data and a user-selected Nominatim-compatible service URL. An API key or access token can optionally be supplied when required by the provider.",
-              "geocoder_url": "Base URL or /reverse endpoint of the Nominatim-compatible service. No service is configured by default; coordinates are not sent when this is empty.",
+              "reverse_geocode": "Send valid GPS coordinates to your chosen service to resolve an address. Requires location data and a Nominatim-compatible service URL. Off by default.",
+              "geocoder_url": "Base URL or /reverse endpoint. Use a URL without login details, query parameters or fragments; redirects are not followed. No service is configured by default.",
               "geocoder_key": "Optional provider API key or access token. For compatible Nominatim-style services it is sent as the key parameter. The credential is sent only to the configured geocoding service and is redacted from diagnostics."
             }
           },

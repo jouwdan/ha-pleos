@@ -8,7 +8,6 @@ from urllib.parse import quote
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .account import account_id
 from pleos_client import ApiError, AuthError
@@ -49,7 +48,7 @@ class PleosCoordinator(DataUpdateCoordinator):
         self.ranges = RangeCache(hass, entry.entry_id)
         self.economy = EVEconomy(hass, entry.entry_id)
         self.geocoder = ReverseGeocoder(
-            async_get_clientsession(hass), self.options["geocoder_url"], self.options["geocoder_key"]
+            client.session, self.options["geocoder_url"], self.options["geocoder_key"]
         )
         self.last_successful_poll = None
         self.using_last_data = False

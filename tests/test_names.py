@@ -88,7 +88,7 @@ class TranslationFileTests(unittest.TestCase):
                 self.assertIn(key, ENTITY_NAMES[reading["domain"]], "documented field without a translation")
                 self.assertEqual(ENTITY_NAMES[reading["domain"]][key], reading["name"])
         # Every translation (apart from coordinator-built entities) is produced by some documented field.
-        coordinator_built = {"connection", "last_successful_poll", "archive", "vehicle_information", "trip", "estimated_ev_consumption"} | {
+        coordinator_built = {"connection", "last_successful_poll", "archive", "vehicle_information", "trip", "estimated_ev_consumption", "location_address"} | {
             key for key in translated if key.endswith(("_api", "_reported_at", "_data_age"))}
         self.assertEqual(translated - set(produced) - coordinator_built - {"location"}, set())
 

@@ -4,6 +4,12 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Optional address sensor in 0.10.0
+
+Reverse geocoding is off by default, so updating does not send coordinates to another service. To add the **Address** sensor, enable **Reverse geocode vehicle location** in the integration's options and configure a Nominatim-compatible service URL and optional API key. Location data must also be enabled. See [configuration](configuration.md#options) and [the Address sensor](entities.md#optional-address-sensor) for privacy, provider and caching details.
+
+Existing entity IDs and recorded history are unchanged. Restart Home Assistant after updating.
+
 ## Vehicle entity refinements in 0.9.2
 
 **Key battery warning** now displays Low / Normal using Home Assistant's battery binary-sensor class. Its entity ID and raw `on` / `off` states stay the same.

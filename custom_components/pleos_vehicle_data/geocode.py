@@ -7,10 +7,9 @@ from urllib.parse import urlparse
 from aiohttp import ClientError, ContentTypeError
 
 LOGGER = logging.getLogger(__name__)
-USER_AGENT = "HomeAssistant-PleosVehicleData/0.9.2"
-# Conservative provider-neutral request/response cache lifetime. This also stays
-# within LocationIQ Free's documented 48-hour request/response caching limit.
+USER_AGENT = "HomeAssistant-PleosVehicleData (https://github.com/jouwdan/ha-pleos)"
 CACHE_TTL_SECONDS = 48 * 60 * 60
+MAX_CACHE_ENTRIES = 256
 
 
 class ReverseGeocoder:
@@ -29,8 +28,14 @@ class ReverseGeocoder:
         if not isinstance(url, str) or not url.strip():
             return ""
         url = url.strip().rstrip("/")
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        try:
+            parsed = urlparse(url)
+            if (parsed.scheme not in ("http", "https") or not parsed.hostname
+                    or parsed.username is not None or parsed.password is not None
+                    or parsed.query or parsed.fragment):
+                return ""
+            parsed.port  # Validate the port before aiohttp uses it.
+        except ValueError:
             return ""
         return url if parsed.path.rstrip("/").endswith("/reverse") else url + "/reverse"
 
@@ -39,9 +44,12 @@ class ReverseGeocoder:
         return round(point["latitude"], 4), round(point["longitude"], 4)
 
     async def apply(self, car):
+        now = time.monotonic()
+        self.cache = {key: cached for key, cached in self.cache.items()
+                      if now - cached["cached_at"] < CACHE_TTL_SECONDS}
         reading = {
             "name": "Address", "value": None, "domain": "sensor", "source": "locations",
-            "attributes": {"geocoder": urlparse(self.service_url).netloc if self.service_url else None},
+            "attributes": {"geocoder": urlparse(self.service_url).hostname if self.service_url else None},
         }
         car["readings"]["location_address"] = reading
         if not self.service_url:
@@ -52,18 +60,21 @@ class ReverseGeocoder:
             reading["attributes"]["geocoding_status"] = "location_missing"
             return
         key = self.cache_key(point)
-        now = time.monotonic()
         cached = self.cache.get(key)
-        if cached is None or now - cached["cached_at"] >= CACHE_TTL_SECONDS:
+        if cached is None:
             address = await self._lookup(*key)
             # Cache successful responses only. Failures retry at a later poll.
             if address:
                 cached = {"address": address, "cached_at": now, "attribution": self.last_attribution}
                 self.cache[key] = cached
+                if len(self.cache) > MAX_CACHE_ENTRIES:
+                    del self.cache[next(iter(self.cache))]
             else:
                 cached = None
         if cached:
-            reading["value"] = cached["address"]
+            reading["value"] = cached["address"][:255]
+            if len(cached["address"]) > 255:
+                reading["attributes"]["full_address"] = cached["address"]
             reading["attributes"]["geocoding_status"] = "ok"
             if cached.get("attribution"):
                 reading["attributes"]["attribution"] = cached["attribution"]
@@ -80,7 +91,7 @@ class ReverseGeocoder:
         self.last_status = None
         self.last_attribution = None
         try:
-            async with self.session.get(self.service_url, params=params, headers=headers, timeout=10) as response:
+            async with self.session.get(self.service_url, params=params, headers=headers, timeout=10, allow_redirects=False) as response:
                 if response.status != 200:
                     self.last_status = f"http_{response.status}"
                     LOGGER.debug("Reverse geocoding returned HTTP %s", response.status)
@@ -95,9 +106,9 @@ class ReverseGeocoder:
             self.last_status = "timeout"
             LOGGER.debug("Reverse geocoding timed out")
             return None
-        except ClientError as error:
+        except ClientError:
             self.last_status = "connection_error"
-            LOGGER.debug("Reverse geocoding failed: %s", error)
+            LOGGER.debug("Reverse geocoding connection failed")
             return None
         if not isinstance(data, dict):
             self.last_status = "invalid_response"

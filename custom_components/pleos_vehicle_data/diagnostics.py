@@ -9,7 +9,7 @@ from .const import DOMAIN
 from .statistics import STATISTICS, statistic_id
 
 # Credentials, the VIN, the user's own vehicle name and precise coordinates.
-TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken", "geocoder_key"}
+TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken", "geocoder_key", "geocoder_url", "full_address"}
 
 
 def scrub(value, secrets):
@@ -88,6 +88,8 @@ def _cars(coordinator):
             if key.endswith(("_latitude", "_longitude")):
                 # Undocumented trip coordinates can also have min/max/mean attributes.
                 reading = reading | {"value": REDACTED, "attributes": {}}
+            elif key == "location_address":
+                reading = reading | {"value": REDACTED}
             elif "rejected_examples" in reading.get("attributes", {}):
                 reading = reading | {"attributes": reading["attributes"] | {
                     "rejected_examples": [example | {"value": REDACTED}
@@ -102,6 +104,8 @@ def _secrets(entry):
     values = [entry.data.get("client_id"), entry.data.get("client_secret"), entry.options.get("geocoder_key"), coordinator.client.token]
     for car in ((coordinator.data or {}).get("cars") or {}).values():
         values.extend(car.get("vehicle", {}).get(key) for key in ("vin", "nickname"))
+        address = car.get("readings", {}).get("location_address", {})
+        values.extend((address.get("value"), address.get("attributes", {}).get("full_address")))
     return sorted({value for value in values if isinstance(value, str) and value}, key=len, reverse=True)
 
 

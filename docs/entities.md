@@ -58,6 +58,12 @@ These remain read-only entities. The API does not support operating locks, windo
 
 Pure EVs do not get **Low fuel warning** or **Engine oil warning** entities. Hybrid, combustion and unknown vehicle types keep them; **Brake fluid warning** remains relevant to EVs. The **Warnings** sensor and raw API diagnostics always preserve the complete reported warning list, including unexpected codes. **Key battery warning** displays Low when reported and Normal when absent from a valid list; missing or invalid warning data remains unavailable.
 
+## Optional address sensor
+
+Enable **Reverse geocode vehicle location** and configure a Nominatim-compatible service under the account's options to add an **Address** sensor. GPS/location must also be enabled. This sends rounded vehicle coordinates to your chosen provider; it is off by default and has no default provider.
+
+The sensor uses the location report's timestamp and freshness. Lookup failures produce an unknown address with a `geocoding_status` attribute; missing or invalid location timestamps make it unavailable. Addresses longer than Home Assistant's 255-character state limit are shortened in the state, with the complete text in `full_address`. Provider attribution is shown when returned. Addresses, the configured URL and API keys are redacted from downloaded diagnostics. Address history can still be recorded locally by Home Assistant.
+
 ## Estimated EV consumption
 
 Pure electric vehicles (`EV`) gain **Estimated EV consumption** once matching battery and odometer reports are available. No extra API calls or manual capacity setting are needed. Home Assistant defaults to **mi/kWh** when its distance unit is miles, otherwise **kWh/100 km**. The sensor’s settings can override this with **Wh/km**, **km/kWh**, **mi/kWh** or **kWh/100 km**; values convert along with the unit.

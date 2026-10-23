@@ -140,7 +140,8 @@ class PleosOptionsFlow(config_entries.OptionsFlowWithReload):
                      ))}
         return self.async_show_form(step_id="init", data_schema=vol.Schema({
             vol.Required(name): section(vol.Schema({
-                vol.Required(key, default=options[key]): selectors[key] for key in keys
+                (vol.Optional if key in ("geocoder_url", "geocoder_key") else vol.Required)(
+                    key, default=options[key]): selectors[key] for key in keys
             }), {"collapsed": False})
             for name, keys in OPTION_SECTIONS.items()
         }))

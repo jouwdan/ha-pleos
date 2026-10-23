@@ -24,16 +24,16 @@ All settings are in one place: **Settings → Devices & services → Pleos Vehic
 | Vehicle status | **Stale-data threshold** | 60 min | 5–10080 min | Readings older than this get `data_stale: true`. They stay available. |
 | Vehicle status | **Enable location data and GPS tracking** | On | | Requests the location endpoint and creates the GPS tracker. Off: neither. |
 | Vehicle status | **Reverse geocode vehicle location** | Off | | Resolves valid GPS coordinates to a human-readable **Address** sensor. Requires location data and a configured Nominatim-compatible service. |
-| Vehicle status | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. No coordinates are sent when empty. |
+| Vehicle status | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. Put credentials in the separate key field; URLs with login details, query parameters or fragments are rejected. Redirects are not followed. No coordinates are sent when empty. |
 | Vehicle status | **Reverse geocoding API key / token** | Empty | | Optional provider credential. For compatible Nominatim-style services it is sent as the `key` parameter. It is sent only to the configured service and redacted from diagnostics. |
 | Vehicle status | **Correct odometer kilometres labelled as miles** | No cars selected | Per car | Treats a selected car's snapshot odometer value as kilometres when the API labels it miles. Use only for a confirmed unit-label error; see [Units](entities.md#units). |
 | Trips | **Trip data interval** | 60 min | 5–1440 min | How often the four trip endpoints are requested. Failed trip requests retry at the next status poll. |
 | Trips | **Fire an event for each new trip** | Off | | Fires `pleos_vehicle_data_trip` with every sample; see [Trip events](trips.md#trip-events). The **Trip** event entity works regardless of this option. |
 | Storage | **Archive raw vehicle data** | Off | | Keeps raw responses in compressed files; see [Response archive](trips.md#response-archive). |
 
-Reverse-geocoding providers have their own usage, caching and attribution terms. The integration uses a 48-hour in-memory request/response cache and exposes provider attribution returned by the API on the Address sensor when available. Check the terms of the service you configure.
+Reverse-geocoding providers have their own usage, caching and attribution terms. The integration keeps at most 256 successful results in memory, expires them after 48 hours and removes expired entries on the next geocoding poll. The Address sensor exposes provider attribution when the API returns it. Check the terms of the service you configure.
 
-Credentials are not options: replace them with **⋮ → Reconfigure**; see [Expired or replaced API keys](troubleshooting.md#expired-or-replaced-api-keys).
+Pleos account credentials are not options: replace them with **⋮ → Reconfigure**; see [Expired or replaced API keys](troubleshooting.md#expired-or-replaced-api-keys).
 
 ## Refresh on demand
 
