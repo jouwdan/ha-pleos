@@ -18,6 +18,14 @@ from .names import ENTITY_NAMES
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data
+    # Refresh HA's saved default for existing tyres without changing explicit user units.
+    registry = entity_registry.async_get(hass)
+    for registered in entity_registry.async_entries_for_config_entry(registry, entry.entry_id):
+        if registered.domain == "sensor" and registered.original_device_class == "pressure":
+            options = dict(registered.options.get("sensor.private", {}))
+            if options.get("suggested_unit_of_measurement") != "psi":
+                registry.async_update_entity_options(registered.entity_id, "sensor.private",
+                                                     options | {"suggested_unit_of_measurement": "psi"})
     async_add_entities([ConnectionSensor(coordinator), LastSuccessfulPollSensor(coordinator)]
                        + ([ArchiveSensor(coordinator)] if coordinator.archive else []))
     discover(entry, async_add_entities, "sensor", ReadingSensor)
@@ -39,6 +47,9 @@ class ReadingSensor(VehicleEntity, SensorEntity):
                 "mi/kWh" if coordinator.hass.config.units.length_unit == "mi" else "kWh/100km"
             )
             self._attr_suggested_display_precision = 2
+        if spec.get("device_class") == "pressure":
+            self._attr_suggested_unit_of_measurement = "psi"
+            self._attr_suggested_display_precision = 1
 
     @property
     def entity_category(self):

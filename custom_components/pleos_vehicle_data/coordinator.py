@@ -16,7 +16,7 @@ from .const import BRANDS, DEFAULT_OPTIONS, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_
 from .data import (Rejections, finite_number, identifier, location, new_trips, readings, reported_age, trip_readings,
                    trip_summary, vehicle_id)
 from .economy import EVEconomy
-from .ranges import RANGE_PREFIX, RangeCache
+from .ranges import RANGE_PREFIX, TYRE_PREFIX, RangeCache
 from .geocode import ReverseGeocoder
 from .statistics import TripStatistics
 from .trips import TripTracker
@@ -149,7 +149,7 @@ class PleosCoordinator(DataUpdateCoordinator):
         previous = (self.data or {}).get("cars", {}).get(car_id, {})
         for key, reading in previous.get("readings", {}).items():
             endpoint = reading["source"]
-            if (endpoint not in SNAPSHOT_ENDPOINTS or endpoint == "locations" or key.startswith(RANGE_PREFIX)
+            if (endpoint not in SNAPSHOT_ENDPOINTS or endpoint == "locations" or key.startswith((RANGE_PREFIX, TYRE_PREFIX))
                     or reading["domain"] != "sensor" or not finite_number(reading["value"])
                     or (reading.get("device_class") not in ("battery", "distance", "temperature", "pressure")
                         and key != "powertrains_engine_fuellevel"

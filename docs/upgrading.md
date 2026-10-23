@@ -4,6 +4,14 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Retained readings and tyre units in 0.10.1
+
+**Tyre pressures** now default to **psi**, including existing sensors and last-trip pressures. Explicit entity unit choices are preserved. For **bar**, use **Unit of measurement** in the entity's settings. Home Assistant converts the displayed number along with the unit. Check numeric thresholds in automations that assumed the previous default unit. Entity IDs stay the same and existing recorded history is not rewritten.
+
+Snapshot tyre pressures and the last completed **Estimated EV consumption** are now saved across reloads and restarts. Missing parked-car pressures retain their last valid readings; charging or an incomplete new consumption window retains the previous completed estimate. Retained values keep their original reporting time and are marked `last_known: true`, `data_stale: true`. A fresh valid reading or completed estimate replaces them. Calculation reset rules and EV-only eligibility are unchanged.
+
+An estimate still present in the previous version's saved observation window can be restored. Values already discarded by an earlier version cannot be recovered from history; the integration needs a new valid tyre reading or completed consumption window before it can retain one. Restart Home Assistant after updating. See [tyre pressures](entities.md#tyre-pressures) and [estimated EV consumption](entities.md#estimated-ev-consumption) for details.
+
 ## Optional address sensor in 0.10.0
 
 Reverse geocoding is off by default, so updating does not send coordinates to another service. To add the **Address** sensor, enable **Reverse geocode vehicle location** in the integration's options and configure a Nominatim-compatible service URL and optional API key. Location data must also be enabled. See [configuration](configuration.md#options) and [the Address sensor](entities.md#optional-address-sensor) for privacy, provider and caching details.

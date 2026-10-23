@@ -32,6 +32,30 @@ def sample_time(sample):
     return datetime.fromisoformat(sample["reported_at"].replace("Z", "+00:00"))
 
 
+def valid_window(window):
+    if not isinstance(window, dict) or not all(valid_sample(window.get(key)) for key in ("start", "last")):
+        return False
+    start, last = window["start"], window["last"]
+    return (sample_time(start) <= sample_time(last) and start["capacity"] == last["capacity"]
+            and start["km"] <= last["km"] and start["soc"] >= last["soc"])
+
+
+def window_reading(window):
+    start, last = window["start"], window["last"]
+    distance, drop = last["km"] - start["km"], start["soc"] - last["soc"]
+    energy = last["capacity"] * drop / 100
+    ready = distance >= MIN_DISTANCE_KM and drop >= MIN_SOC_DROP
+    return {
+        "name": "Estimated EV consumption", "domain": "sensor", "source": "batteries",
+        "device_class": "energy_distance", "unit_of_measurement": "kWh/100km",
+        "state_class": "measurement", "value": energy * 100 / distance if ready else None,
+        "attributes": {"estimated": True, "reported_at": last["reported_at"], "last_known": False,
+                       "window_started_at": start["reported_at"], "distance_km": round(distance, 3),
+                       "energy_used_kwh": round(energy, 3), "battery_capacity_kwh": last["capacity"],
+                       "state_of_charge_drop": round(drop, 3)},
+    }
+
+
 def snapshot(car):
     """Never combine retained values or reports from different vehicle timestamps."""
     readings = car["readings"]
@@ -59,6 +83,7 @@ class EVEconomy:
     def __init__(self, hass, entry_id):
         self.store = economy_store(hass, entry_id)
         self.windows = None
+        self.estimates = {}
         self.dirty = False
 
     async def apply(self, cars, stale_minutes):
@@ -71,14 +96,18 @@ class EVEconomy:
                 stored = None
             self.windows = {}
             for car_id, window in (stored.items() if isinstance(stored, dict) else ()):
-                if not isinstance(window, dict) or not all(valid_sample(window.get(key)) for key in ("start", "last")):
+                if not isinstance(window, dict):
                     continue
-                start, last = window["start"], window["last"]
-                if (sample_time(start) <= sample_time(last) and start["capacity"] == last["capacity"]
-                        and start["km"] <= last["km"] and start["soc"] >= last["soc"]):
-                    self.windows[car_id] = window
+                if valid_window(window):
+                    self.windows[car_id] = {key: window[key] for key in ("start", "last")}
+                # Older stores contain only the active window; recover its estimate if complete.
+                estimate = window.get("estimate", window)
+                if valid_window(estimate) and window_reading(estimate)["value"] is not None:
+                    self.estimates[car_id] = {key: estimate[key] for key in ("start", "last")}
 
         kept = {}
+        estimates = {car_id: value for car_id, value in self.estimates.items()
+                     if car_id in cars and cars[car_id]["vehicle"].get("type") == "EV"}
         for car_id, car in cars.items():
             if car["vehicle"].get("type") != "EV" or (current := snapshot(car)) is None:
                 continue
@@ -101,24 +130,22 @@ class EVEconomy:
                         window = None
                 window = {"start": window["start"] if window else current, "last": current}
             kept[car_id] = window
-            start, last = window["start"], window["last"]
-            distance, drop = last["km"] - start["km"], start["soc"] - last["soc"]
-            energy = last["capacity"] * drop / 100
-            ready = distance >= MIN_DISTANCE_KM and drop >= MIN_SOC_DROP
-            car["readings"][ECONOMY_KEY] = {
-                "name": "Estimated EV consumption", "domain": "sensor", "source": "batteries",
-                "device_class": "energy_distance", "unit_of_measurement": "kWh/100km",
-                "state_class": "measurement", "value": energy * 100 / distance if ready else None,
-                "attributes": {"estimated": True, "reported_at": last["reported_at"],
-                               "window_started_at": start["reported_at"], "distance_km": round(distance, 3),
-                               "energy_used_kwh": round(energy, 3), "battery_capacity_kwh": last["capacity"],
-                               "state_of_charge_drop": round(drop, 3)},
-            }
-        self.dirty |= kept != self.windows
+            reading = car["readings"][ECONOMY_KEY] = window_reading(window)
+            if reading["value"] is not None:
+                estimates[car_id] = {key: dict(window[key]) for key in ("start", "last")}
+        for car_id, estimate in estimates.items():
+            if cars[car_id]["readings"].get(ECONOMY_KEY, {}).get("value") is None:
+                reading = window_reading(estimate)
+                reading["attributes"].update(last_known=True, data_stale=True)
+                cars[car_id]["readings"][ECONOMY_KEY] = reading
+        self.dirty |= kept != self.windows or estimates != self.estimates
         self.windows = kept
+        self.estimates = estimates
         if self.dirty:
+            saved = {car_id: kept.get(car_id, {}) | ({"estimate": estimates[car_id]} if car_id in estimates else {})
+                     for car_id in kept.keys() | estimates.keys()}
             try:
-                await self.store.async_save(kept)
+                await self.store.async_save(saved)
             except OSError:
                 LOGGER.warning("Could not save EV consumption; estimates may restart after reload")
             else:

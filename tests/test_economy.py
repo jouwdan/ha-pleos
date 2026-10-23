@@ -132,10 +132,15 @@ class EconomyTests(HomeAssistantTestCase):
                        {"status": "v2lOperating"}, {"status": "v2xOperating"},
                        {"charging": None}, {"plugin": "invalid"}, {"status": "invalid"}):
             await self.ready()
-            self.assertIsNone(await self.poll(km=1050, soc=70, minutes=20, charge=charge))
+            result = await self.poll(km=1050, soc=70, minutes=20, charge=charge)
+            self.assertAlmostEqual(result["value"], 14.24)
+            self.assertTrue(result["attributes"]["last_known"])
+            self.assertTrue(result["attributes"]["data_stale"])
+            self.assertEqual(result["attributes"]["reported_at"], self.at(25))
             self.assertEqual(self.coordinator.economy.windows, {})
             result = await self.poll(km=1060, soc=69, minutes=10)
-            self.assertIsNone(result["value"])
+            self.assertAlmostEqual(result["value"], 14.24)
+            self.assertTrue(result["attributes"]["last_known"])
             self.coordinator.economy.windows = {}
 
     async def test_battery_increase_capacity_change_and_stationary_loss_start_new_windows(self):
@@ -144,21 +149,26 @@ class EconomyTests(HomeAssistantTestCase):
             await self.ready()
             result = await self.poll(km=1050, soc=kwargs.get("soc", 70), minutes=20,
                                      capacity=kwargs.get("capacity", 256320))
-            self.assertIsNone(result["value"])
-            self.assertEqual(result["attributes"]["window_started_at"], self.at(20))
+            self.assertAlmostEqual(result["value"], 14.24)
+            self.assertTrue(result["attributes"]["last_known"])
+            self.assertEqual(self.coordinator.economy.windows[CAR_ID]["start"]["reported_at"], self.at(20))
 
     async def test_odometer_reset_impossible_jump_and_revised_same_timestamp_reset(self):
         for km, minutes in ((900, 20), (2000, 20), (1051, 25)):
             self.coordinator.economy.windows = {}
             await self.ready()
-            self.assertIsNone((await self.poll(km=km, soc=69, minutes=minutes))["value"])
+            self.assertAlmostEqual((await self.poll(km=km, soc=69, minutes=minutes))["value"], 14.24)
+            self.assertEqual(self.coordinator.economy.windows[CAR_ID]["start"]["km"], km)
 
     async def test_repeated_and_out_of_order_reports_do_not_add_consumption(self):
         original = await self.ready()
         self.coordinator.economy.store.async_save = AsyncMock(wraps=self.coordinator.economy.store.async_save)
         self.assertEqual(await self.poll(km=1050, soc=70, minutes=25), original)
         self.coordinator.economy.store.async_save.assert_not_called()
-        self.assertIsNone(await self.poll(km=1030, soc=75, minutes=40))
+        retained = await self.poll(km=1030, soc=75, minutes=40)
+        self.assertEqual(retained["value"], original["value"])
+        self.assertEqual(retained["attributes"]["reported_at"], original["attributes"]["reported_at"])
+        self.assertTrue(retained["attributes"]["last_known"])
         self.assertEqual(await self.poll(km=1050, soc=70, minutes=25), original)
 
     async def test_stale_mismatched_missing_or_retained_inputs_cannot_create_estimate(self):
@@ -167,7 +177,9 @@ class EconomyTests(HomeAssistantTestCase):
             self.coordinator.economy.windows = {}
             await self.ready()
             settings = {"km": 1060, "soc": 65, "minutes": 15, **kwargs}
-            self.assertIsNone(await self.poll(**settings))
+            retained = await self.poll(**settings)
+            self.assertAlmostEqual(retained["value"], 14.24)
+            self.assertTrue(retained["attributes"]["last_known"])
             self.assertEqual(self.coordinator.economy.windows, {})
 
     async def test_stale_new_reports_cannot_start_or_extend_a_window(self):
@@ -175,7 +187,7 @@ class EconomyTests(HomeAssistantTestCase):
         self.assertEqual(self.coordinator.economy.windows, {})
         await self.ready()
         self.coordinator.options["stale_minutes"] = 1
-        self.assertIsNone(await self.poll(km=1060, soc=65, minutes=10))
+        self.assertAlmostEqual((await self.poll(km=1060, soc=65, minutes=10))["value"], 14.24)
         self.assertEqual(self.coordinator.economy.windows, {})
 
     async def test_repeated_parked_reading_can_remain_visible_but_long_gap_resets(self):
@@ -186,7 +198,9 @@ class EconomyTests(HomeAssistantTestCase):
         window = self.coordinator.economy.windows[CAR_ID]
         window["start"]["reported_at"] = self.at(1600)
         window["last"]["reported_at"] = self.at(1500)
-        self.assertIsNone((await self.poll(km=1060, soc=69, minutes=10))["value"])
+        retained = await self.poll(km=1060, soc=69, minutes=10)
+        self.assertAlmostEqual(retained["value"], 14.24)
+        self.assertTrue(retained["attributes"]["last_known"])
 
     async def test_restart_retains_window_and_account_removal_clears_it(self):
         await self.poll()
@@ -209,6 +223,7 @@ class EconomyTests(HomeAssistantTestCase):
         self.client.vehicles.return_value = []
         await self.coordinator._async_update_data()
         self.assertEqual(self.coordinator.economy.windows, {})
+        self.assertEqual(self.coordinator.economy.estimates, {})
 
     async def test_corrupt_storage_and_save_failure_do_not_break_vehicle_updates(self):
         await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: {"start": None}, "bad": []})
@@ -229,3 +244,60 @@ class EconomyTests(HomeAssistantTestCase):
             result = await self.poll(km=1060, soc=69, minutes=10)
         self.assertIsNone(result["value"])
         self.assertEqual(await economy_store(self.hass, self.entry.entry_id).async_load(), original)
+
+    async def test_completed_estimate_survives_charging_restart_and_new_window(self):
+        original = await self.ready()
+        await self.poll(km=1050, soc=90, minutes=20, charge={"charging": True})
+        await self.coordinator.async_shutdown()
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        result = await self.poll(km=1050, soc=90, minutes=15, charge={"plugin": "connected"})
+        self.assertEqual(result["value"], original["value"])
+        self.assertEqual(result["attributes"]["reported_at"], self.at(25))
+        sensor = await self.register_sensor()
+        self.assertTrue(sensor.available)
+        self.assertTrue(self.hass.states.get(sensor.entity_id).attributes["last_known"])
+        self.assertTrue(sensor.extra_state_attributes["data_stale"])
+        # Retaining a result must not bridge the calculation across a charge.
+        result = await self.poll(km=1050, soc=90, minutes=10)
+        self.assertEqual(result["value"], original["value"])
+        result = await self.poll(km=1070, soc=85, minutes=0)
+        self.assertAlmostEqual(result["value"], 17.8)
+        self.assertFalse(result["attributes"]["last_known"])
+        self.assertEqual(result["attributes"]["window_started_at"], self.at(10))
+        sensor.async_write_ha_state()
+        self.assertFalse(sensor.extra_state_attributes["data_stale"])
+        await async_remove_entry(self.hass, self.entry)
+        self.assertIsNone(await economy_store(self.hass, self.entry.entry_id).async_load())
+
+    async def test_legacy_complete_window_restores_estimate_on_missing_inputs(self):
+        await self.ready()
+        legacy = {CAR_ID: self.coordinator.economy.windows[CAR_ID]}
+        await economy_store(self.hass, self.entry.entry_id).async_save(legacy)
+        await self.coordinator.async_shutdown()
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        result = await self.poll(soc=None)
+        self.assertAlmostEqual(result["value"], 14.24)
+        self.assertTrue(result["attributes"]["last_known"])
+        self.assertEqual(self.coordinator.economy.windows, {})
+
+    async def test_invalid_saved_estimates_are_ignored(self):
+        sample = {"reported_at": self.at(20), "km": 1000, "soc": 80, "capacity": 71.2}
+        for estimate in (None, [], {"start": sample, "last": sample},
+                         {"start": sample, "last": sample | {"km": 1050, "soc": 70, "capacity": 72}},
+                         {"start": sample, "last": sample | {"km": float("inf"), "soc": 70}},
+                         {"start": sample, "last": sample | {"km": 1050, "soc": 70, "reported_at": "invalid"}}):
+            with self.subTest(estimate=estimate):
+                await self.coordinator.async_shutdown()
+                await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: {"estimate": estimate}})
+                self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+                self.assertIsNone(await self.poll(soc=None))
+
+    async def test_new_vehicle_does_not_inherit_an_estimate(self):
+        await self.ready()
+        other = CAR | {"vin": "SYNTHETIC-CAR-002"}
+        await self.poll(soc=None, cars=[CAR, other])
+        other_readings = self.coordinator.data["cars"][vehicle_id("kia", other["vin"])]["readings"]
+        self.assertNotIn(ECONOMY_KEY, other_readings)
+        self.client.vehicles.return_value = []
+        await self.coordinator._async_update_data()
+        self.assertEqual(await economy_store(self.hass, self.entry.entry_id).async_load(), {})

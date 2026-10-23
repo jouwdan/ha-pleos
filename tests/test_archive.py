@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from homeassistant.helpers import entity_registry
+
 from custom_components.pleos_vehicle_data import async_remove_entry
 from custom_components.pleos_vehicle_data.archive import TRIP_HASH_DAYS, write_records
 from custom_components.pleos_vehicle_data.coordinator import PleosCoordinator
@@ -133,6 +135,7 @@ class ArchiveTests(HomeAssistantTestCase):
         self.assertNotIn(vehicle_id("kia", CAR["vin"]) + "/speed", speed)
 
     async def test_archive_can_be_disabled(self):
+        await entity_registry.async_load(self.hass, load_empty=True)
         self.hass.config_entries.async_update_entry(self.entry, options={"archive": False})
         coordinator = PleosCoordinator(self.hass, self.entry, self.client)
         self.addAsyncCleanup(coordinator.async_shutdown)
