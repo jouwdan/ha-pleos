@@ -2,7 +2,7 @@
 
 [![Validate](https://github.com/jouwdan/ha-pleos/actions/workflows/validate.yml/badge.svg)](https://github.com/jouwdan/ha-pleos/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/jouwdan/ha-pleos)](https://github.com/jouwdan/ha-pleos/releases/latest)
-[![HACS custom integration](https://img.shields.io/badge/HACS-Custom_Integration-41BDF5)](https://www.hacs.xyz/docs/faq/custom_repositories/)
+[![Available in HACS](https://img.shields.io/badge/HACS-Default-41BDF5)](https://www.hacs.xyz/)
 
 Bring your Hyundai, Kia or Genesis vehicle into Home Assistant using the official Pleos **personal Vehicle Data API**. Each car gets its own device, with entities you can use in dashboards and automations. Multiple accounts are supported.
 
@@ -29,8 +29,8 @@ You need:
 ## Install with HACS
 
 1. [Install HACS](https://www.hacs.dev/docs/use/download/download/) if you do not already have it.
-2. Open **HACS → ⋮ → Custom repositories**, add `https://github.com/jouwdan/ha-pleos`, and choose **Integration**.
-3. Find **Pleos Vehicle Data**, download it, then restart Home Assistant.
+2. Open **HACS** and search for **Pleos Vehicle Data**.
+3. Open the result, choose **Download**, then restart Home Assistant.
 
 Prefer to install manually? Follow [Install without HACS](docs/configuration.md#install-without-hacs).
 
