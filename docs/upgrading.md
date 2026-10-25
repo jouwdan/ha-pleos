@@ -4,6 +4,14 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Cumulative EV consumption in 0.11.0
+
+**Estimated EV consumption** now combines valid observed energy and distance across charging cycles. It retains the cumulative average through charging, missing data and restarts. Each new continuous period must still cover at least 10 km and a 5-percentage-point battery drop before contributing; invalid reports and gaps are excluded. See [estimated EV consumption](entities.md#estimated-ev-consumption).
+
+The latest saved completed period seeds the new total. Earlier periods discarded by old versions cannot be reconstructed, so existing installations accumulate from that saved period onward. `window_started_at` identifies the first period included. Existing entity IDs and display-unit preferences are preserved; old history keeps the estimates recorded by the previous calculation.
+
+Restart Home Assistant after updating. No configuration changes are required. Removing the vehicle or integration entry clears its accumulated estimate.
+
 ## Odometer setup in 0.10.2
 
 New accounts now see an **Odometer** step that makes the existing per-car unit-label correction easier to find. It is off by default. This is for kilometres incorrectly labelled as miles by Pleos; Home Assistant still handles normal km/miles display conversion. See [odometer setup](configuration.md#odometer-setup).

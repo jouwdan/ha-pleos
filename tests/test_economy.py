@@ -57,6 +57,11 @@ class EconomyTests(HomeAssistantTestCase):
         await self.poll()
         return await self.poll(km=1050, soc=70, minutes=25)
 
+    def reset_tracking(self):
+        self.coordinator.economy.windows = {}
+        self.coordinator.economy.estimates = {}
+        self.coordinator.economy.totals = {}
+
     async def register_sensor(self, key=ECONOMY_KEY):
         spec = self.coordinator.data["cars"][CAR_ID]["readings"][key]
         sensor = ReadingSensor(self.coordinator, CAR_ID, key, spec)
@@ -117,11 +122,11 @@ class EconomyTests(HomeAssistantTestCase):
 
     async def test_odometer_units_and_user_correction_are_applied_once(self):
         for unit, factor in (("km", 1), ("mile", 1.609344), ("meter", .001), ("feet", .0003048)):
-            self.coordinator.economy.windows = {}
+            self.reset_tracking()
             await self.poll(km=1000 / factor, unit=unit)
             result = await self.poll(km=1050 / factor, unit=unit, soc=70, minutes=25)
             self.assertAlmostEqual(result["value"], 14.24)
-        self.coordinator.economy.windows = {}
+        self.reset_tracking()
         self.coordinator.options["odometer_km_vehicles"] = [CAR_ID]
         await self.poll(unit="mile")
         result = await self.poll(km=1050, unit="mile", soc=70, minutes=25)
@@ -141,11 +146,11 @@ class EconomyTests(HomeAssistantTestCase):
             result = await self.poll(km=1060, soc=69, minutes=10)
             self.assertAlmostEqual(result["value"], 14.24)
             self.assertTrue(result["attributes"]["last_known"])
-            self.coordinator.economy.windows = {}
+            self.reset_tracking()
 
     async def test_battery_increase_capacity_change_and_stationary_loss_start_new_windows(self):
         for kwargs in ({"soc": 71}, {"capacity": 270000}, {"soc": 69}):
-            self.coordinator.economy.windows = {}
+            self.reset_tracking()
             await self.ready()
             result = await self.poll(km=1050, soc=kwargs.get("soc", 70), minutes=20,
                                      capacity=kwargs.get("capacity", 256320))
@@ -155,7 +160,7 @@ class EconomyTests(HomeAssistantTestCase):
 
     async def test_odometer_reset_impossible_jump_and_revised_same_timestamp_reset(self):
         for km, minutes in ((900, 20), (2000, 20), (1051, 25)):
-            self.coordinator.economy.windows = {}
+            self.reset_tracking()
             await self.ready()
             self.assertAlmostEqual((await self.poll(km=km, soc=69, minutes=minutes))["value"], 14.24)
             self.assertEqual(self.coordinator.economy.windows[CAR_ID]["start"]["km"], km)
@@ -174,7 +179,7 @@ class EconomyTests(HomeAssistantTestCase):
     async def test_stale_mismatched_missing_or_retained_inputs_cannot_create_estimate(self):
         for kwargs in ({"driving_minutes": 24}, {"soc": None}, {"capacity": 0},
                        {"capacity": 3600001}, {"fail_driving": True}):
-            self.coordinator.economy.windows = {}
+            self.reset_tracking()
             await self.ready()
             settings = {"km": 1060, "soc": 65, "minutes": 15, **kwargs}
             retained = await self.poll(**settings)
@@ -224,6 +229,7 @@ class EconomyTests(HomeAssistantTestCase):
         await self.coordinator._async_update_data()
         self.assertEqual(self.coordinator.economy.windows, {})
         self.assertEqual(self.coordinator.economy.estimates, {})
+        self.assertEqual(self.coordinator.economy.totals, {})
 
     async def test_corrupt_storage_and_save_failure_do_not_break_vehicle_updates(self):
         await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: {"start": None}, "bad": []})
@@ -261,9 +267,12 @@ class EconomyTests(HomeAssistantTestCase):
         result = await self.poll(km=1050, soc=90, minutes=10)
         self.assertEqual(result["value"], original["value"])
         result = await self.poll(km=1070, soc=85, minutes=0)
-        self.assertAlmostEqual(result["value"], 17.8)
+        self.assertAlmostEqual(result["value"], 10.68 * 100 / 70)
+        self.assertEqual(result["attributes"]["distance_km"], 70)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 10.68)
+        self.assertEqual(result["attributes"]["aggregation"], "since_installation")
         self.assertFalse(result["attributes"]["last_known"])
-        self.assertEqual(result["attributes"]["window_started_at"], self.at(10))
+        self.assertEqual(result["attributes"]["window_started_at"], self.at(55))
         sensor.async_write_ha_state()
         self.assertFalse(sensor.extra_state_attributes["data_stale"])
         await async_remove_entry(self.hass, self.entry)
@@ -279,6 +288,116 @@ class EconomyTests(HomeAssistantTestCase):
         self.assertAlmostEqual(result["value"], 14.24)
         self.assertTrue(result["attributes"]["last_known"])
         self.assertEqual(self.coordinator.economy.windows, {})
+
+    async def test_lifetime_totals_extend_each_window_once_and_survive_restart(self):
+        await self.ready()
+        result = await self.poll(km=1060, soc=68, minutes=20)
+        self.assertEqual(result["attributes"]["distance_km"], 60)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 8.544)
+        await self.poll(km=1060, soc=90, minutes=15, charge={"charging": True})
+        await self.poll(km=1060, soc=90, minutes=10)
+        result = await self.poll(km=1080, soc=85, minutes=0)
+        self.assertAlmostEqual(result["value"], 12.104 * 100 / 80)
+        self.assertEqual(result["attributes"]["distance_km"], 80)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 12.104)
+        self.assertEqual(result["attributes"]["state_of_charge_drop"], 17)
+        await self.coordinator.async_shutdown()
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        self.assertEqual(await self.poll(km=1080, soc=85, minutes=0), result)
+        self.coordinator.economy.store.async_save = AsyncMock(wraps=self.coordinator.economy.store.async_save)
+        for _ in range(3):
+            self.assertEqual(await self.poll(km=1080, soc=85, minutes=0), result)
+        self.coordinator.economy.store.async_save.assert_not_called()
+
+    async def test_missing_and_old_reports_do_not_bridge_or_double_count_lifetime(self):
+        original = await self.ready()
+        await self.poll(km=1060, soc=65, minutes=20, fail_driving=True)
+        result = await self.poll(km=1030, soc=75, minutes=40)
+        self.assertEqual(result["value"], original["value"])
+        self.assertEqual(self.coordinator.economy.windows, {})
+        await self.poll(km=1060, soc=65, minutes=15)
+        partial = await self.poll(km=1070, soc=63, minutes=10)
+        self.assertEqual(partial["value"], original["value"])
+        self.assertEqual(partial["attributes"]["distance_km"], 50)
+        # An incomplete period is excluded when charging breaks continuity.
+        await self.poll(km=1070, soc=90, minutes=8, charge={"plugin": "connected"})
+        await self.poll(km=1070, soc=90, minutes=5)
+        result = await self.poll(km=1090, soc=85, minutes=0)
+        self.assertAlmostEqual(result["value"], 10.68 * 100 / 70)
+        self.assertEqual(result["attributes"]["distance_km"], 70)
+
+    async def test_lifetime_uses_each_periods_capacity(self):
+        await self.ready()
+        await self.poll(km=1050, soc=70, minutes=20, capacity=360000)
+        result = await self.poll(km=1080, soc=65, minutes=10, capacity=360000)
+        self.assertAlmostEqual(result["value"], 12.12 * 100 / 80)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 12.12)
+        self.assertEqual(result["attributes"]["battery_capacity_kwh"], 100)
+
+    async def test_legacy_migration_counts_saved_period_once_when_it_continues(self):
+        await self.ready()
+        saved = await economy_store(self.hass, self.entry.entry_id).async_load()
+        for with_estimate in (True, False):
+            with self.subTest(with_estimate=with_estimate):
+                await self.coordinator.async_shutdown()
+                legacy = {key: value for key, value in saved[CAR_ID].items()
+                          if key != "totals" and (with_estimate or key != "estimate")}
+                await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: legacy})
+                self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+                result = await self.poll(km=1060, soc=68, minutes=20)
+                self.assertAlmostEqual(result["value"], 14.24)
+                self.assertEqual(result["attributes"]["distance_km"], 60)
+                self.assertEqual(result["attributes"]["energy_used_kwh"], 8.544)
+                await self.coordinator.async_shutdown()
+                self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+                self.assertEqual(await self.poll(km=1060, soc=68, minutes=20), result)
+
+    async def test_saved_totals_without_checkpoint_do_not_recount_active_window(self):
+        original = await self.ready()
+        saved = await economy_store(self.hass, self.entry.entry_id).async_load()
+        saved[CAR_ID]["estimate"] = None
+        await self.coordinator.async_shutdown()
+        await economy_store(self.hass, self.entry.entry_id).async_save(saved)
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        result = await self.poll(km=1050, soc=70, minutes=25)
+        self.assertEqual(result["value"], original["value"])
+        self.assertEqual(result["attributes"]["distance_km"], 50)
+        self.assertTrue(result["attributes"]["last_known"])
+        await self.poll(km=1050, soc=90, minutes=15)
+        await self.coordinator.async_shutdown()
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        result = await self.poll(km=1070, soc=85, minutes=5)
+        self.assertEqual(result["attributes"]["distance_km"], 70)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 10.68)
+
+    async def test_invalid_saved_totals_fall_back_to_verified_window(self):
+        await self.ready()
+        saved = await economy_store(self.hass, self.entry.entry_id).async_load()
+        total = saved[CAR_ID]["totals"]
+        for invalid in (None, [], total | {"distance_km": 0}, total | {"distance_km": True},
+                        total | {"energy_used_kwh": float("inf")}, total | {"energy_used_kwh": 1e308},
+                        total | {"energy_used_kwh": -1}, total | {"state_of_charge_drop": "10"},
+                        total | {"reported_at": "invalid"}, total | {"window_started_at": self.at(10)}):
+            with self.subTest(invalid=invalid):
+                await self.coordinator.async_shutdown()
+                await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: saved[CAR_ID] | {"totals": invalid}})
+                self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+                result = await self.poll(km=1050, soc=70, minutes=25)
+                self.assertAlmostEqual(result["value"], 14.24)
+                self.assertEqual(result["attributes"]["distance_km"], 50)
+
+    async def test_inconsistent_saved_checkpoint_cannot_recount_or_subtract_distance(self):
+        await self.ready()
+        saved = await economy_store(self.hass, self.entry.entry_id).async_load()
+        for changes in ({"reported_at": self.at(15)}, {"distance_km": 20}):
+            with self.subTest(changes=changes):
+                await self.coordinator.async_shutdown()
+                total = saved[CAR_ID]["totals"] | changes
+                await economy_store(self.hass, self.entry.entry_id).async_save({CAR_ID: saved[CAR_ID] | {"totals": total}})
+                self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+                result = await self.poll(km=1050, soc=70, minutes=25)
+                self.assertEqual(result["attributes"]["distance_km"], total["distance_km"])
+                self.assertTrue(result["attributes"]["last_known"])
 
     async def test_invalid_saved_estimates_are_ignored(self):
         sample = {"reported_at": self.at(20), "km": 1000, "soc": 80, "capacity": 71.2}

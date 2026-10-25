@@ -15,6 +15,7 @@ ECONOMY_KEY = "estimated_ev_consumption"
 MIN_DISTANCE_KM = 10
 MIN_SOC_DROP = 5
 MAX_GAP_SECONDS = 24 * 60 * 60
+USAGE_FIELDS = ("distance_km", "energy_used_kwh", "state_of_charge_drop")
 
 
 def economy_store(hass, entry_id):
@@ -40,19 +41,36 @@ def valid_window(window):
             and start["km"] <= last["km"] and start["soc"] >= last["soc"])
 
 
-def window_reading(window):
+def window_totals(window):
     start, last = window["start"], window["last"]
     distance, drop = last["km"] - start["km"], start["soc"] - last["soc"]
     energy = last["capacity"] * drop / 100
-    ready = distance >= MIN_DISTANCE_KM and drop >= MIN_SOC_DROP
+    return {"window_started_at": start["reported_at"], "reported_at": last["reported_at"],
+            "distance_km": distance, "energy_used_kwh": energy, "state_of_charge_drop": drop,
+            "battery_capacity_kwh": last["capacity"]}
+
+
+def valid_totals(totals):
+    if not isinstance(totals, dict):
+        return False
+    return (all(reported_age(totals.get(key)) is not None for key in ("window_started_at", "reported_at"))
+            and all(finite_number(totals.get(key)) for key in (*USAGE_FIELDS, "battery_capacity_kwh"))
+            and totals["distance_km"] >= MIN_DISTANCE_KM and totals["state_of_charge_drop"] >= MIN_SOC_DROP
+            and totals["energy_used_kwh"] > 0 and 0 < totals["battery_capacity_kwh"] <= 1000
+            and finite_number(totals["energy_used_kwh"] / totals["distance_km"] * 100)
+            and datetime.fromisoformat(totals["window_started_at"].replace("Z", "+00:00"))
+            <= datetime.fromisoformat(totals["reported_at"].replace("Z", "+00:00")))
+
+
+def consumption_reading(totals):
+    ready = valid_totals(totals)
     return {
         "name": "Estimated EV consumption", "domain": "sensor", "source": "batteries",
         "device_class": "energy_distance", "unit_of_measurement": "kWh/100km",
-        "state_class": "measurement", "value": energy * 100 / distance if ready else None,
-        "attributes": {"estimated": True, "reported_at": last["reported_at"], "last_known": False,
-                       "window_started_at": start["reported_at"], "distance_km": round(distance, 3),
-                       "energy_used_kwh": round(energy, 3), "battery_capacity_kwh": last["capacity"],
-                       "state_of_charge_drop": round(drop, 3)},
+        "state_class": "measurement",
+        "value": totals["energy_used_kwh"] / totals["distance_km"] * 100 if ready else None,
+        "attributes": totals | {"estimated": True, "aggregation": "since_installation", "last_known": False,
+                                **{key: round(totals[key], 3) for key in USAGE_FIELDS}},
     }
 
 
@@ -84,6 +102,7 @@ class EVEconomy:
         self.store = economy_store(hass, entry_id)
         self.windows = None
         self.estimates = {}
+        self.totals = {}
         self.dirty = False
 
     async def apply(self, cars, stale_minutes):
@@ -102,16 +121,37 @@ class EVEconomy:
                     self.windows[car_id] = {key: window[key] for key in ("start", "last")}
                 # Older stores contain only the active window; recover its estimate if complete.
                 estimate = window.get("estimate", window)
-                if valid_window(estimate) and window_reading(estimate)["value"] is not None:
+                if valid_window(estimate) and valid_totals(window_totals(estimate)):
                     self.estimates[car_id] = {key: estimate[key] for key in ("start", "last")}
+                total = window.get("totals")
+                if not valid_totals(total):
+                    total = window_totals(self.estimates[car_id]) if car_id in self.estimates else None
+                if total:
+                    self.totals[car_id] = dict(total)
+                    self.dirty |= total != window.get("totals")
+                    checkpoint = self.estimates.get(car_id)
+                    if checkpoint and (sample_time(checkpoint["last"]) != sample_time(total)
+                                       or any(window_totals(checkpoint)[key] > total[key] for key in USAGE_FIELDS)):
+                        self.estimates.pop(car_id)
+                        checkpoint = None
+                    active = self.windows.get(car_id)
+                    # A saved window overlapping totals needs its exact counting checkpoint.
+                    if (active and sample_time(active["start"]) < sample_time(total)
+                            and (not checkpoint or active["start"] != checkpoint["start"]
+                                 or sample_time(active["last"]) < sample_time(total))):
+                        self.windows.pop(car_id, None)
 
         kept = {}
         estimates = {car_id: value for car_id, value in self.estimates.items()
                      if car_id in cars and cars[car_id]["vehicle"].get("type") == "EV"}
+        totals = {car_id: dict(value) for car_id, value in self.totals.items()
+                  if car_id in cars and cars[car_id]["vehicle"].get("type") == "EV"}
         for car_id, car in cars.items():
             if car["vehicle"].get("type") != "EV" or (current := snapshot(car)) is None:
                 continue
             window = self.windows.get(car_id)
+            if not window and car_id in totals and sample_time(current) <= sample_time(totals[car_id]):
+                continue
             if window and sample_time(current) < sample_time(window["last"]):
                 kept[car_id] = window
                 continue
@@ -130,20 +170,32 @@ class EVEconomy:
                         window = None
                 window = {"start": window["start"] if window else current, "last": current}
             kept[car_id] = window
-            reading = car["readings"][ECONOMY_KEY] = window_reading(window)
+            usage = window_totals(window)
+            reading = car["readings"][ECONOMY_KEY] = consumption_reading(usage)
             if reading["value"] is not None:
-                estimates[car_id] = {key: dict(window[key]) for key in ("start", "last")}
-        for car_id, estimate in estimates.items():
+                previous = estimates.get(car_id)
+                if previous != window:
+                    counted = window_totals(previous) if previous and previous["start"] == window["start"] else {}
+                    if car_id in totals:
+                        usage = usage | {"window_started_at": totals[car_id]["window_started_at"],
+                                         **{key: totals[car_id][key] + (usage[key] - counted.get(key, 0))
+                                            for key in USAGE_FIELDS}}
+                    totals[car_id] = usage
+                    estimates[car_id] = {key: dict(window[key]) for key in ("start", "last")}
+                car["readings"][ECONOMY_KEY] = consumption_reading(totals[car_id])
+        for car_id, total in totals.items():
             if cars[car_id]["readings"].get(ECONOMY_KEY, {}).get("value") is None:
-                reading = window_reading(estimate)
+                reading = consumption_reading(total)
                 reading["attributes"].update(last_known=True, data_stale=True)
                 cars[car_id]["readings"][ECONOMY_KEY] = reading
-        self.dirty |= kept != self.windows or estimates != self.estimates
+        self.dirty |= kept != self.windows or estimates != self.estimates or totals != self.totals
         self.windows = kept
         self.estimates = estimates
+        self.totals = totals
         if self.dirty:
             saved = {car_id: kept.get(car_id, {}) | ({"estimate": estimates[car_id]} if car_id in estimates else {})
-                     for car_id in kept.keys() | estimates.keys()}
+                     | ({"totals": totals[car_id]} if car_id in totals else {})
+                     for car_id in kept.keys() | estimates.keys() | totals.keys()}
             try:
                 await self.store.async_save(saved)
             except OSError:
