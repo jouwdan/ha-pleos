@@ -9,6 +9,8 @@ from .const import DOMAIN
 from .entity import VehicleEntity, discover
 from .models import PleosConfigEntry
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: PleosConfigEntry, async_add_entities: AddEntitiesCallback

@@ -16,6 +16,8 @@ from .data import identifier
 from .models import PleosConfigEntry
 from .names import ENTITY_NAMES
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: PleosConfigEntry, async_add_entities: AddEntitiesCallback
