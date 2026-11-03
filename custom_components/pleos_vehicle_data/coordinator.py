@@ -3,14 +3,15 @@
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .account import account_id
-from pleos_client import ApiError, AuthError
+from pleos_client import ApiError, AuthError, PleosClient
 from .archive import ResponseArchive
 from .const import BRANDS, DEFAULT_OPTIONS, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
 from .data import (Rejections, finite_number, identifier, location, new_trips, readings, reported_age, trip_readings,
@@ -21,6 +22,9 @@ from .geocode import ReverseGeocoder
 from .statistics import TripStatistics
 from .trips import TripTracker
 
+if TYPE_CHECKING:
+    from .models import PleosConfigEntry
+
 LOGGER = logging.getLogger(__name__)
 
 # Fields of Get Vehicles that already have named attributes or the sensor state.
@@ -30,7 +34,9 @@ SKIPPED = object()
 
 
 class PleosCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, entry, client):
+    config_entry: PleosConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: PleosConfigEntry, client: PleosClient) -> None:
         self.client = client
         self.brand = entry.data["brand"]
         self.account_id = account_id(entry)

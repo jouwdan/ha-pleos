@@ -1,13 +1,18 @@
 """Boolean vehicle readings."""
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .entity import VehicleEntity, discover
+from .models import PleosConfigEntry
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant, entry: PleosConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     registry = entity_registry.async_get(hass)
     for car_id, car in entry.runtime_data.data["cars"].items():
         if car["vehicle"].get("type") != "EV":
