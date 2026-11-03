@@ -4,7 +4,7 @@ import logging
 import time
 from urllib.parse import urlparse
 
-from aiohttp import ClientError, ContentTypeError
+from nominatim_reverse_client import GeocodingError, NominatimClient, reverse_url
 
 LOGGER = logging.getLogger(__name__)
 USER_AGENT = "HomeAssistant-PleosVehicleData (https://github.com/jouwdan/ha-pleos)"
@@ -19,25 +19,12 @@ class ReverseGeocoder:
         self.session = session
         self.service_url = self._reverse_url(service_url)
         self.api_key = api_key.strip() if isinstance(api_key, str) else ""
+        self.client = NominatimClient(session, self.service_url, user_agent=USER_AGENT, api_key=self.api_key)
         self.cache = {}
         self.last_status = None
         self.last_attribution = None
 
-    @staticmethod
-    def _reverse_url(url):
-        if not isinstance(url, str) or not url.strip():
-            return ""
-        url = url.strip().rstrip("/")
-        try:
-            parsed = urlparse(url)
-            if (parsed.scheme not in ("http", "https") or not parsed.hostname
-                    or parsed.username is not None or parsed.password is not None
-                    or parsed.query or parsed.fragment):
-                return ""
-            parsed.port  # Validate the port before aiohttp uses it.
-        except ValueError:
-            return ""
-        return url if parsed.path.rstrip("/").endswith("/reverse") else url + "/reverse"
+    _reverse_url = staticmethod(reverse_url)
 
     @staticmethod
     def cache_key(point):
@@ -82,43 +69,14 @@ class ReverseGeocoder:
             reading["attributes"]["geocoding_status"] = self.last_status or "lookup_failed"
 
     async def _lookup(self, latitude, longitude):
-        # Some Nominatim-compatible providers (including LocationIQ v1) default
-        # to XML, so request JSON explicitly.
-        params = {"lat": latitude, "lon": longitude, "format": "json", "addressdetails": 1}
-        if self.api_key:
-            params["key"] = self.api_key
-        headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
         self.last_status = None
         self.last_attribution = None
         try:
-            async with self.session.get(self.service_url, params=params, headers=headers, timeout=10, allow_redirects=False) as response:
-                if response.status != 200:
-                    self.last_status = f"http_{response.status}"
-                    LOGGER.debug("Reverse geocoding returned HTTP %s", response.status)
-                    return None
-                try:
-                    data = await response.json()
-                except (ContentTypeError, ValueError):
-                    self.last_status = "invalid_json"
-                    LOGGER.debug("Reverse geocoding returned a non-JSON response")
-                    return None
-        except TimeoutError:
-            self.last_status = "timeout"
-            LOGGER.debug("Reverse geocoding timed out")
+            address = await self.client.reverse(latitude, longitude)
+        except GeocodingError as error:
+            self.last_status = error.code
+            LOGGER.debug("Reverse geocoding failed: %s", error.code)
             return None
-        except ClientError:
-            self.last_status = "connection_error"
-            LOGGER.debug("Reverse geocoding connection failed")
-            return None
-        if not isinstance(data, dict):
-            self.last_status = "invalid_response"
-            return None
-        display_name = data.get("display_name")
-        if not isinstance(display_name, str) or not display_name.strip():
-            self.last_status = "no_display_name"
-            return None
-        attribution = data.get("attribution") or data.get("licence") or data.get("license")
-        if isinstance(attribution, str) and attribution.strip():
-            self.last_attribution = attribution.strip()
+        self.last_attribution = address.attribution
         self.last_status = "ok"
-        return display_name.strip()
+        return address.display_name

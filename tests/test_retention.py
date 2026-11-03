@@ -58,8 +58,9 @@ class RetentionTests(HomeAssistantTestCase):
                 car = await self.poll(ApiError(status, 'fixture_failure'))
                 for key, value in kept.items():
                     sensor = self.sensors[key]
-                    self.assertTrue(sensor.available, key)
-                    self.assertEqual(sensor.native_value, value)
+                    self.assertFalse(sensor.available, key)
+                    self.assertIsNone(sensor.native_value)
+                    self.assertEqual(car['readings'][key]['value'], value)
                     self.assertEqual(sensor.extra_state_attributes['reported_at'], reported)
                     self.assertGreaterEqual(sensor.extra_state_attributes['data_age_minutes'], 30)
                     self.assertTrue(sensor.extra_state_attributes['last_known'])
@@ -91,13 +92,41 @@ class RetentionTests(HomeAssistantTestCase):
         self.assertFalse(sensor.extra_state_attributes['data_stale'])
         self.assertNotIn('api_unit_of_measurement', sensor.extra_state_attributes)
 
+    async def test_endpoint_outage_logs_once_and_recovers_without_hiding_other_endpoints(self):
+        await self.seed()
+
+        def response(path):
+            if path.endswith('/batteries'):
+                raise ApiError(503, 'fixture_failure')
+            return {'timestamp': stamp(), 'odometer': {'value': 1600, 'unit': 'km'}}
+
+        logger = 'custom_components.pleos_vehicle_data.coordinator'
+        self.client.get = AsyncMock(side_effect=response)
+        with self.assertLogs(logger, level='WARNING') as logs:
+            await self.coordinator.async_refresh()
+        self.assertEqual(len(logs.records), 1)
+        self.assertFalse(self.sensors['batteries_charge_stateofcharge'].available)
+        self.assertTrue(self.sensors['driving_odometer'].available)
+        self.assertEqual(self.sensors['driving_odometer'].native_value, 1600)
+        with self.assertNoLogs(logger, level='WARNING'):
+            await self.coordinator.async_refresh()
+        self.client.get = AsyncMock(return_value={'timestamp': stamp(), 'charge': {'stateOfCharge': 61}})
+        with self.assertLogs(logger, level='INFO') as logs:
+            await self.coordinator.async_refresh()
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn('recovered', logs.output[0])
+        self.assertTrue(self.sensors['batteries_charge_stateofcharge'].available)
+        self.assertEqual(self.sensors['batteries_charge_stateofcharge'].native_value, 61)
+
     async def test_no_retention_for_permissions_no_data_missing_invalid_or_undated_values(self):
         for response in (ApiError(403, '403'), ApiError(404, '4045'), None,
                          {'timestamp': stamp(), 'charge': {'stateOfCharge': 101}}):
             with self.subTest(response=response):
                 await self.seed()
                 await self.poll(response)
-                self.assertFalse(self.sensors['batteries_charge_stateofcharge'].available)
+                sensor = self.sensors['batteries_charge_stateofcharge']
+                self.assertEqual(sensor.available, not isinstance(response, ApiError) or response.code == '4045')
+                self.assertIsNone(sensor.native_value)
         await self.seed()
         self.coordinator.data['cars'][CAR_ID]['sources']['batteries'] = None
         car = await self.poll(ApiError(503, 'fixture_failure'))

@@ -42,10 +42,12 @@ class CoordinatorTests(HomeAssistantTestCase):
         self.assertFalse(sensor.available)
         self.coordinator.last_update_success = True
         self.coordinator.data["cars"][car_id]["sources"]["batteries"] = None
-        self.assertFalse(sensor.available)
+        self.assertTrue(sensor.available)
+        self.assertIsNone(sensor.native_value)
         self.coordinator.data["cars"][car_id]["sources"]["batteries"] = stamp()
         del self.coordinator.data["cars"][car_id]["readings"][sensor.key]
-        self.assertFalse(sensor.available)
+        self.assertTrue(sensor.available)
+        self.assertIsNone(sensor.native_value)
 
     async def test_partial_endpoint_and_network_failure(self):
         self.client.vehicles = AsyncMock(return_value=[CAR])

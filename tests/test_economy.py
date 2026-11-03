@@ -278,6 +278,26 @@ class EconomyTests(HomeAssistantTestCase):
         await async_remove_entry(self.hass, self.entry)
         self.assertIsNone(await economy_store(self.hass, self.entry.entry_id).async_load())
 
+    async def test_account_outage_preserves_cumulative_checkpoints_and_does_not_count_twice(self):
+        original = await self.ready()
+        sensor = await self.register_sensor()
+        saved = await economy_store(self.hass, self.entry.entry_id).async_load()
+        self.client.vehicles.side_effect = ApiError(503, "fixture_failure")
+        await self.coordinator.async_refresh()
+        self.assertFalse(sensor.available)
+        self.assertEqual(await economy_store(self.hass, self.entry.entry_id).async_load(), saved)
+        self.client.vehicles.side_effect = None
+        await self.coordinator.async_refresh()
+        self.assertTrue(sensor.available)
+        self.assertEqual(sensor.native_value, original["value"])
+        self.assertEqual(await economy_store(self.hass, self.entry.entry_id).async_load(), saved)
+        await self.coordinator.async_shutdown()
+        self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
+        result = await self.poll(km=1050, soc=70, minutes=25)
+        self.assertEqual(result["value"], original["value"])
+        self.assertEqual(result["attributes"]["distance_km"], 50)
+        self.assertEqual(result["attributes"]["energy_used_kwh"], 7.12)
+
     async def test_legacy_complete_window_restores_estimate_on_missing_inputs(self):
         await self.ready()
         legacy = {CAR_ID: self.coordinator.economy.windows[CAR_ID]}

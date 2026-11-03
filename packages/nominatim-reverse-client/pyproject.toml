@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nominatim-reverse-client"
+version = "0.1.0"
+description = "Async reverse geocoding with a caller-owned session and explicit provider"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["aiohttp>=3.9.5"]
+classifiers = [
+  "Framework :: AsyncIO",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Source = "https://github.com/jouwdan/ha-pleos/tree/main/packages/nominatim-reverse-client"
+Issues = "https://github.com/jouwdan/ha-pleos/issues"
+Changelog = "https://github.com/jouwdan/ha-pleos/blob/main/packages/nominatim-reverse-client/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["build>=1", "coverage>=7", "mypy>=1.10", "ruff>=0.11", "twine>=6"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nominatim_reverse_client = ["py.typed"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["nominatim_reverse_client"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

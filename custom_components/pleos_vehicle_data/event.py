@@ -6,15 +6,22 @@ InfluxDB integration hold every trip, including several that arrive in one query
 """
 
 from homeassistant.components.event import EventEntity
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import BRANDS, DOMAIN, TRIP_ENDPOINTS
 from .data import identifier
+from .models import PleosConfigEntry
 from .names import ENTITY_NAMES
 
+PARALLEL_UPDATES = 0
 
-async def async_setup_entry(hass, entry, async_add_entities):
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: PleosConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator = entry.runtime_data
     added = set()
 
@@ -48,7 +55,7 @@ class TripEvent(CoordinatorEntity, EventEntity):
 
     @property
     def available(self):
-        return self.car_id in ((self.coordinator.data or {}).get("cars") or {})
+        return super().available and self.car_id in ((self.coordinator.data or {}).get("cars") or {})
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

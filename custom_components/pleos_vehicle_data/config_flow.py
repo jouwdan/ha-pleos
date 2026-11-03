@@ -18,6 +18,7 @@ from homeassistant.helpers.selector import (
 from .account import account_id, credential_id
 from pleos_client import ApiError, AuthError, PleosClient
 from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN
+from .models import PleosConfigEntry
 from .data import vehicle_id
 
 KEY_FIELDS = {
@@ -113,7 +114,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: PleosConfigEntry) -> "PleosOptionsFlow":
         return PleosOptionsFlow()
 
     def key_configured(self, brand, client_id, exclude=None):

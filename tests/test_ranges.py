@@ -46,7 +46,8 @@ class RangeTests(HomeAssistantTestCase):
             with self.subTest(value=value):
                 await self.poll(value=value, unit="km")
                 self.assertTrue(sensor.available)
-                self.assertEqual((sensor.native_value, sensor.native_unit_of_measurement), (100, "mi"))
+                self.assertEqual((sensor.native_value, sensor.native_unit_of_measurement), (None, "mi"))
+                self.assertEqual(sensor.car["readings"][KEY]["value"], 100)
                 self.assertEqual(sensor.extra_state_attributes["reported_at"], reported)
                 self.assertGreaterEqual(sensor.extra_state_attributes["data_age_minutes"], 120)
                 self.assertTrue(sensor.extra_state_attributes["data_stale"])
@@ -62,7 +63,7 @@ class RangeTests(HomeAssistantTestCase):
         sensor = self.sensor()
         self.client.get = AsyncMock(side_effect=ApiError(0, "connection_failed"))
         self.coordinator.data = await self.coordinator._async_update_data()
-        self.assertTrue(sensor.available)
+        self.assertFalse(sensor.available)
         self.assertTrue(sensor.extra_state_attributes["data_stale"])
         self.assertLess(sensor.extra_state_attributes["data_age_minutes"], 1)
         self.assertEqual(sensor.car["readings"]["powertrains_api"]["value"], "error")
@@ -74,11 +75,13 @@ class RangeTests(HomeAssistantTestCase):
         sensor = self.sensor()
         self.client.get = AsyncMock(return_value=None)
         self.coordinator.data = await self.coordinator._async_update_data()
-        self.assertEqual(sensor.native_value, 100)
+        self.assertIsNone(sensor.native_value)
+        self.assertEqual(sensor.car["readings"][KEY]["value"], 100)
         self.assertTrue(sensor.available)
         for reported in ("invalid", stamp(-60)):
             await self.poll("250", reported_at=reported)
-            self.assertEqual(sensor.native_value, 100)
+            self.assertIsNone(sensor.native_value)
+            self.assertEqual(sensor.car["readings"][KEY]["value"], 100)
             self.assertTrue(sensor.extra_state_attributes["last_known"])
 
     async def test_restored_ranges_are_discovered_and_convert_once(self):
@@ -103,8 +106,9 @@ class RangeTests(HomeAssistantTestCase):
         await platform.async_add_entities(entities)
         sensor = next(entity for entity in entities if getattr(entity, "key", None) == KEY)
         state = self.hass.states.get(sensor.entity_id)
-        self.assertEqual((sensor.native_value, sensor.native_unit_of_measurement), (160.9344, "km"))
-        self.assertAlmostEqual(float(state.state), 100)
+        self.assertEqual((sensor.native_value, sensor.native_unit_of_measurement), (None, "km"))
+        self.assertEqual(state.state, "unknown")
+        self.assertEqual(sensor.car["readings"][KEY]["value"], 160.9344)
         self.assertEqual(state.attributes["reported_at"], reported)
         self.assertTrue(state.attributes["data_stale"])
 
@@ -121,7 +125,8 @@ class RangeTests(HomeAssistantTestCase):
         self.coordinator.data = await self.coordinator._async_update_data()
         first = self.sensor("powertrains_distancetoempties_phev")
         second = self.sensor("powertrains_distancetoempties_phev_2")
-        self.assertEqual((first.native_value, second.native_value), (400, 45))
+        self.assertEqual((first.native_value, second.native_value), (None, 45))
+        self.assertEqual(first.car["readings"][first.key]["value"], 400)
         self.assertTrue(first.extra_state_attributes["last_known"])
         self.assertFalse(second.extra_state_attributes["last_known"])
         other = self.coordinator.data["cars"][vehicle_id("kia", cars[1]["vin"])]

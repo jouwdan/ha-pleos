@@ -275,8 +275,10 @@ class NativeEntityTests(HomeAssistantTestCase):
             reloaded = ReadingSensor(self.coordinator, car_id, key, spec)
             payloads["powertrains"]["timestamp"] = None
             await self.coordinator.async_refresh()
-            self.assertFalse(reloaded.available)
-            self.assertFalse(sensor.available)
+            self.assertTrue(reloaded.available)
+            self.assertIsNone(reloaded.native_value)
+            self.assertTrue(sensor.available)
+            self.assertIsNone(sensor.native_value)
         finally:
             await platform.async_reset()
 
@@ -362,7 +364,7 @@ class NativeEntityTests(HomeAssistantTestCase):
             self.assertEqual(self.hass.states.get(old_key_battery.entity_id).attributes["device_class"], "battery")
             self.assertEqual(self.hass.states.get(old_key_battery.entity_id).state, "off")
             self.assertEqual(registry.async_get(old_key_battery.entity_id).original_device_class, "battery")
-            for warnings, expected in (([], "off"), (None, "unavailable"), (["invalid"], "unavailable"),
+            for warnings, expected in (([], "off"), (None, "unknown"), (["invalid"], "unknown"),
                                        (["washFluid"], "on")):
                 payloads["status"]["warnings"] = warnings
                 payloads["status"]["hood"] = "closed"
@@ -374,8 +376,10 @@ class NativeEntityTests(HomeAssistantTestCase):
             self.assertEqual(self.hass.states.get(warning_id).state, "unavailable")
             self.assertEqual(self.hass.states.get("binary_sensor.van_bonnet").state, "unavailable")
             self.assertEqual(self.hass.states.get(old_charge.entity_id).state, "unavailable")
-            self.assertEqual(self.hass.states.get(old_limit.entity_id).state, "100")
-            self.assertTrue(self.hass.states.get(old_limit.entity_id).attributes["last_known"])
+            self.assertEqual(self.hass.states.get(old_limit.entity_id).state, "unavailable")
+            retained = self.coordinator.data["cars"][car_id]["readings"]["batteries_charge_targetstateofcharge_quick"]
+            self.assertEqual(retained["value"], 100)
+            self.assertTrue(retained["attributes"]["last_known"])
             self.client.get = AsyncMock(side_effect=lambda path: payloads.get(path.rsplit("/", 1)[-1]))
             await self.coordinator.async_refresh()
             self.assertEqual(self.hass.states.get(warning_id).state, "on")

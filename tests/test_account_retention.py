@@ -47,12 +47,12 @@ class AccountRetentionTests(HomeAssistantTestCase):
             self.coordinator, CAR_ID, "location", {"name": "Location", "source": "locations"})
         return reported
 
-    async def fail(self, error):
+    async def fail_poll(self, error):
         self.client.vehicles.side_effect = error
         self.client.retry_at = time.monotonic() + 300 if getattr(error, "status", None) == 429 else 0
         await self.coordinator.async_refresh()
 
-    async def test_consecutive_outages_keep_all_existing_states_and_recovery_replaces_them(self):
+    async def test_outages_hide_states_without_discarding_cached_data(self):
         reported = await self.seed()
         previous = self.coordinator.data
         original = deepcopy(previous)
@@ -65,12 +65,12 @@ class AccountRetentionTests(HomeAssistantTestCase):
         self.client.get.reset_mock()
         for status in (0, 503, 429):
             with self.subTest(status=status):
-                await self.fail(ApiError(status, "fixture_failure"))
+                await self.fail_poll(ApiError(status, "fixture_failure"))
                 self.assertFalse(self.coordinator.last_update_success)
                 self.assertTrue(_coordinator_state(self.coordinator)["using_last_data"])
                 self.assertIs(self.coordinator.data, previous)
                 for key, entity in self.entities.items():
-                    self.assertTrue(entity.available, key)
+                    self.assertFalse(entity.available, key)
                     self.assertTrue(entity.extra_state_attributes["last_known"], key)
                     self.assertTrue(entity.extra_state_attributes["data_stale"], key)
                 battery = self.entities[BATTERY]
@@ -83,7 +83,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
                 self.assertEqual(ConnectionSensor(self.coordinator).native_value,
                                  "rate_limited" if status == 429 else "api_unavailable")
                 self.assertEqual(LastSuccessfulPollSensor(self.coordinator).native_value, poll)
-        self.assertEqual(updates.call_count, 3)
+        self.assertEqual(updates.call_count, 1)
         self.client.get.assert_not_awaited()
         self.assertEqual(previous, original)
         self.assertEqual(self.coordinator.archive.status, archive)
@@ -118,14 +118,14 @@ class AccountRetentionTests(HomeAssistantTestCase):
                     available = []
                     unsubscribe = self.coordinator.async_add_listener(lambda: available.append(battery.available))
                     try:
-                        await self.fail(ApiError(0, "connection_failed"))
-                        await self.fail(failure)
+                        await self.fail_poll(ApiError(0, "connection_failed"))
+                        await self.fail_poll(failure)
                         self.assertFalse(self.coordinator.using_last_data)
                         self.assertFalse(battery.available)
                         # A later transport failure must not revive readings after access was rejected.
-                        await self.fail(ApiError(0, "connection_failed"))
+                        await self.fail_poll(ApiError(0, "connection_failed"))
                         self.assertFalse(battery.available)
-                        self.assertEqual(available, [True, False, False])
+                        self.assertEqual(available, [False])
                     finally:
                         unsubscribe()
 
@@ -144,22 +144,23 @@ class AccountRetentionTests(HomeAssistantTestCase):
         for payload in (None, {"timestamp": stamp(), "charge": {"stateOfCharge": 101}}):
             with self.subTest(payload=payload):
                 await self.seed()
-                await self.fail(ApiError(0, "connection_failed"))
+                await self.fail_poll(ApiError(0, "connection_failed"))
                 self.client.vehicles.side_effect = None
                 self.payloads["batteries"] = payload
                 await self.coordinator.async_refresh()
                 self.assertFalse(self.coordinator.using_last_data)
-                self.assertFalse(self.entities[BATTERY].available)
+                self.assertTrue(self.entities[BATTERY].available)
+                self.assertIsNone(self.entities[BATTERY].native_value)
 
     async def test_removed_vehicle_is_not_revived_by_subsequent_failure(self):
         await self.seed()
-        await self.fail(ApiError(0, "connection_failed"))
+        await self.fail_poll(ApiError(0, "connection_failed"))
         self.client.vehicles.side_effect = None
         self.client.vehicles.return_value = []
         await self.coordinator.async_refresh()
         for entity in self.entities.values():
             self.assertFalse(entity.available)
         self.assertEqual(await self.coordinator.ranges.store.async_load(), {})
-        await self.fail(ApiError(0, "connection_failed"))
+        await self.fail_poll(ApiError(0, "connection_failed"))
         for entity in self.entities.values():
             self.assertFalse(entity.available)

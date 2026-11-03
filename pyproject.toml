@@ -1,0 +1,21 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--strict-markers --disable-socket --allow-unix-socket"
+
+[tool.coverage.run]
+branch = true
+source = ["custom_components.pleos_vehicle_data"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

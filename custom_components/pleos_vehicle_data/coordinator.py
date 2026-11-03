@@ -1,18 +1,19 @@
 """Fetch each account once and share its data across all vehicle entities."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
+from typing import TYPE_CHECKING
 
-from homeassistant.core import callback
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .account import account_id
-from pleos_client import ApiError, AuthError
+from pleos_client import ApiError, AuthError, PleosClient
 from .archive import ResponseArchive
-from .const import BRANDS, DEFAULT_OPTIONS, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
+from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
 from .data import (Rejections, finite_number, identifier, location, new_trips, readings, reported_age, trip_readings,
                    trip_summary, vehicle_id)
 from .economy import EVEconomy
@@ -20,6 +21,9 @@ from .ranges import RANGE_PREFIX, TYRE_PREFIX, RangeCache
 from .geocode import ReverseGeocoder
 from .statistics import TripStatistics
 from .trips import TripTracker
+
+if TYPE_CHECKING:
+    from .models import PleosConfigEntry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +34,9 @@ SKIPPED = object()
 
 
 class PleosCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, entry, client):
+    config_entry: PleosConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: PleosConfigEntry, client: PleosClient) -> None:
         self.client = client
         self.brand = entry.data["brand"]
         self.account_id = account_id(entry)
@@ -52,9 +58,48 @@ class PleosCoordinator(DataUpdateCoordinator):
         )
         self.last_successful_poll = None
         self.using_last_data = False
+        self._refresh_waiters: set[asyncio.Future[bool]] = set()
+        self._poll_tasks: set[asyncio.Task] = set()
+
+    async def async_refresh_for_service(self) -> None:
+        """Wait for the next completed poll, including a poll already in progress."""
+        if self._shutdown_requested:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="refresh_cancelled")
+        completed = self.hass.loop.create_future()
+        self._refresh_waiters.add(completed)
+        try:
+            try:
+                await asyncio.shield(self.config_entry.async_create_background_task(
+                    self.hass, self.async_request_refresh(), "Pleos manual refresh"
+                ))
+            except asyncio.CancelledError:
+                if self._shutdown_requested:
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN, translation_key="refresh_cancelled"
+                    ) from None
+                raise
+            if not await completed:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="refresh_cancelled" if self._shutdown_requested else "refresh_failed",
+                )
+        finally:
+            self._refresh_waiters.discard(completed)
+
+    async def async_shutdown(self) -> None:
+        await super().async_shutdown()
+        # HA's debouncer starts deferred polls outside the entry's task collection.
+        polls = tuple(self._poll_tasks)
+        for task in polls:
+            task.cancel()
+        await asyncio.gather(*polls, return_exceptions=True)
+        for completed in self._refresh_waiters:
+            if not completed.done():
+                completed.set_result(False)
 
     async def _async_update_data(self):
-        self._previous_update_success = self.last_update_success
+        task = asyncio.current_task()
+        self._poll_tasks.add(task)
         can_keep_data = self.last_update_success or self.using_last_data
         self.using_last_data = False
         try:
@@ -72,7 +117,7 @@ class PleosCoordinator(DataUpdateCoordinator):
             if self.archive:
                 await self.archive.load()
                 self.archive.begin()
-                self.archive.add_vehicles(now, vehicles, self.client.response_meta.get("/v1/vehicles/consent", {}))
+                self.archive.add_vehicles(now, vehicles, self.client.vehicles_metadata)
             for vehicle in vehicles:
                 car_id = vehicle_id(self.account_id, vehicle["vin"])
                 car = await self._update_car(car_id, vehicle, result, pending, now)
@@ -107,13 +152,20 @@ class PleosCoordinator(DataUpdateCoordinator):
                 error.status in (0, 429) or 500 <= error.status < 600
             )
             raise UpdateFailed(str(error)) from None
+        finally:
+            self._poll_tasks.discard(task)
 
     @callback
     def _async_refresh_finished(self):
         super()._async_refresh_finished()
-        # Home Assistant skips notifications after consecutive failures; retained states still need updates.
-        if not self.last_update_success and not self._previous_update_success:
-            self.async_update_listeners()
+        success = self.last_update_success and all(
+            car["readings"][identifier(endpoint) + "_api"]["value"] != "error"
+            for car in (self.data or {}).get("cars", {}).values()
+            for endpoint in ENDPOINTS
+        )
+        for completed in self._refresh_waiters:
+            if not completed.done():
+                completed.set_result(success)
 
     async def _update_car(self, car_id, vehicle, result, pending, now):
         car = {"vehicle": vehicle, "readings": {"vehicle_information": self._vehicle_information(vehicle)},
@@ -169,7 +221,7 @@ class PleosCoordinator(DataUpdateCoordinator):
     def _vehicle_information(self, vehicle):
         attributes = {"vin": vehicle["vin"], "nickname": vehicle.get("nickname"),
                       "model_code": vehicle.get("name"), "model": vehicle.get("sellname"),
-                      "api_metadata": self.client.response_meta.get("/v1/vehicles/consent", {})}
+                      "api_metadata": self.client.vehicles_metadata}
         # Keep every other field Get Vehicles returns, without overwriting the named ones above.
         for field, value in vehicle.items():
             if field not in NAMED_VEHICLE_FIELDS and value is not None:
@@ -192,23 +244,13 @@ class PleosCoordinator(DataUpdateCoordinator):
         if result["status"] == "rate_limited":
             source["value"] = "error"
             source["attributes"] = {"http_status": 429, "error_code": "rate_limited"}
+            self._log_endpoint_transition(car_id, endpoint, source)
             return SKIPPED
-        path = f"/v1/vehicles/{quote(vehicle['vin'], safe='')}/{endpoint}"
         date_range = self.trips.query_range(car_id, endpoint, now) if endpoint in TRIP_ENDPOINTS else None
         try:
-            try:
-                data = await self.client.get(path + self._query(date_range))
-            except ApiError as error:
-                if not self._refused_range(date_range, error):
-                    raise
-                # The API's maximum range is undocumented. If two days work where the longer range
-                # failed, keep to two days from now on.
-                date_range = self.trips.query_range(car_id, endpoint, now, days=2)
-                data = await self.client.get(path + self._query(date_range))
-                LOGGER.info("Pleos refused a %s-day trip query (HTTP %s, code %s); querying two days from now on",
-                            self.trips.max_days, error.status, error.code)
-                self.trips.max_days = 2
+            response = await self.client.vehicle_data(vehicle["vin"], endpoint, date_range)
         except ApiError as error:
+            date_range = error.query
             if error.status == 429:
                 result["status"] = "rate_limited"
             source["value"] = "no_data" if error.code == "4045" else "error"
@@ -218,25 +260,32 @@ class PleosCoordinator(DataUpdateCoordinator):
                 if error.code == "4045":
                     self.trips.covered(car_id, endpoint, date_range)
             # An unsupported or failing endpoint must not hide other data.
+            self._log_endpoint_transition(car_id, endpoint, source)
             return SKIPPED
+        data, date_range = response.data, response.query
+        if self.client.trip_max_days is not None and self.trips.max_days != self.client.trip_max_days:
+            self.trips.max_days = self.client.trip_max_days
+            LOGGER.info("Pleos accepted a shorter trip query; querying %s days from now on", self.trips.max_days)
         if date_range:
             source["attributes"]["query"] = date_range
             self.trips.covered(car_id, endpoint, date_range)
-        source["attributes"]["api_metadata"] = self.client.response_meta.get(path, {})
+        source["attributes"]["api_metadata"] = response.metadata
         if isinstance(data, dict):
             source["attributes"]["data"] = data
+        self._log_endpoint_transition(car_id, endpoint, source)
         return data
 
-    @staticmethod
-    def _query(date_range):
-        return "?" + "&".join(f"{key}={value}" for key, value in date_range.items()) if date_range else ""
-
-    def _refused_range(self, date_range, error):
-        """A trip query longer than two days was refused as a bad request."""
-        if not date_range or self.trips.max_days <= 2 or error.status not in (400, 422) or error.code == "4045":
-            return False
-        start, end = (datetime.strptime(date_range[key], "%Y%m%d") for key in ("startDate", "endDate"))
-        return (end - start).days > 1
+    def _log_endpoint_transition(self, car_id, endpoint, source):
+        previous = (self.data or {}).get("cars", {}).get(car_id, {}).get("readings", {}).get(
+            identifier(endpoint) + "_api", {}
+        )
+        failed = source["value"] == "error"
+        if failed and previous.get("value") != "error":
+            LOGGER.warning("Pleos %s for %s is unavailable (HTTP %s, code %s)",
+                           endpoint, car_id, source["attributes"].get("http_status"),
+                           source["attributes"].get("error_code"))
+        elif not failed and previous.get("value") == "error":
+            LOGGER.info("Pleos %s for %s recovered", endpoint, car_id)
 
     def _apply_trips(self, car_id, car, endpoint, data, source, pending):
         rejections = Rejections(endpoint)

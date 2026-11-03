@@ -43,9 +43,19 @@ Pleos account credentials are not options: replace them with **⋮ → Reconfigu
 
 ## Refresh on demand
 
-Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in Home Assistant's action editor or an automation, and select the **Account** to refresh. It requests another poll of that account without waiting for its normal polling interval. Repeated requests are batched, and trip polling intervals and API rate-limit backoff still apply.
+Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in Home Assistant's action editor or an automation, and select the **Account** to refresh. It waits for the requested or already running poll to complete. Repeated requests are batched, and trip polling intervals and API rate-limit backoff still apply. A failed account request or requested endpoint raises an action error; healthy endpoints still update. Disabling an endpoint, reusing trips between scheduled polls, and a successful `no_data` response are not failures. Unloading the account before completion also reports an action error.
 
 This fetches data already available in Pleos. It cannot wake the car or make it upload new readings, so the returned values may be unchanged.
+
+## Removing the integration
+
+1. Open **Settings → Devices & services → Pleos Vehicle Data**. On the account entry, choose **⋮ → Delete** and confirm. Repeat for other accounts you want to remove.
+2. Removing an account deletes its saved ranges and tyre pressures, EV-consumption totals and checkpoints, trip tracking and imported trip statistics. Export anything you need first. Ordinary entity history follows Home Assistant's recorder retention policy.
+3. Raw archive files remain in `<config>/pleos_vehicle_data/archive/`. Delete the relevant account folder yourself if you no longer want it; keep folders belonging to accounts you still use.
+4. If you no longer use the personal API key elsewhere, revoke it in Pleos Playground's **My Vehicle Data API** key-management page. Also revoke a separate geocoding-provider key if you no longer use it.
+5. After removing all accounts, uninstall **Pleos Vehicle Data** through HACS and restart Home Assistant. For a manual installation, remove `<config>/custom_components/pleos_vehicle_data` and restart instead.
+
+To replace credentials or temporarily stop polling, use reconfiguration or disable the account; deleting and adding it again creates a new account namespace and does not restore its derived totals.
 
 ## Example dashboard
 

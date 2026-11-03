@@ -12,6 +12,6 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/jouwdan/ha-pleos/issues",
-  "requirements": ["pleos-client==0.1.0"],
-  "version": "0.11.0"
+  "requirements": ["nominatim-reverse-client==0.1.0", "pleos-client==0.2.0"],
+  "version": "0.12.0"
 }

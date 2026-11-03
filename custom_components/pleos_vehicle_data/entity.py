@@ -5,7 +5,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import BRANDS, DOMAIN
-from .data import reported_age
+from .data import identifier, reported_age
+from .economy import ECONOMY_KEY
 from .names import ENTITY_NAMES
 
 
@@ -60,7 +61,25 @@ class VehicleEntity(CoordinatorEntity):
 
     @property
     def reading(self):
-        return self.car["readings"].get(self.key) if self.car else None
+        if not self.car or (reading := self.car["readings"].get(self.key)) is None:
+            return None
+        attrs = reading.get("attributes", {})
+        stamp = attrs.get("reported_at", self.car["sources"].get(self.spec["source"]))
+        if not self.historical and (
+            attrs.get("last_known") or reported_age(stamp) is None
+        ):
+            # Preserve the cached reading and its provenance without presenting it as current.
+            return reading | {"value": None}
+        return reading
+
+    @property
+    def historical(self):
+        return (
+            self.key == ECONOMY_KEY
+            or self.spec.get("historical")
+            or self.spec.get("entity_category") == "diagnostic"
+            and self.spec.get("device_class") != "battery"
+        )
 
     @property
     def reported_at(self):
@@ -68,18 +87,12 @@ class VehicleEntity(CoordinatorEntity):
 
     @property
     def available(self):
-        if (not super().available and not self.coordinator.using_last_data) or not self.car:
+        if not super().available or not self.car:
             return False
-        if self.key == "location":
-            present = self.car["location"] is not None
-        else:
-            present = self.reading is not None
-        age = reported_age(self.reported_at)
-        if (self.spec.get("entity_category") == "diagnostic" and self.spec.get("device_class") != "battery"
-                or self.spec.get("historical")):
-            return present
-        # Parked cars can return the same valid snapshot for days.
-        return present and age is not None
+        if self.historical:
+            return True
+        source = self.car["readings"].get(identifier(self.spec["source"]) + "_api", {})
+        return source.get("value") not in ("error", "disabled")
 
     @property
     def extra_state_attributes(self):

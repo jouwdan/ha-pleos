@@ -4,8 +4,11 @@ import time
 from datetime import datetime
 
 from homeassistant.components.diagnostics import REDACTED, async_redact_data
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import DOMAIN
+from .models import PleosConfigEntry
 from .statistics import STATISTICS, statistic_id
 
 # Credentials, the VIN, the user's own vehicle name and precise coordinates.
@@ -109,7 +112,7 @@ def _secrets(entry):
     return sorted({value for value in values if isinstance(value, str) and value}, key=len, reverse=True)
 
 
-async def async_get_config_entry_diagnostics(hass, entry):
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: PleosConfigEntry) -> dict:
     coordinator = entry.runtime_data
     return scrub({
         "entry": {"title": entry.title, "data": dict(entry.data), "options": dict(entry.options)},
@@ -121,7 +124,9 @@ async def async_get_config_entry_diagnostics(hass, entry):
     }, _secrets(entry))
 
 
-async def async_get_device_diagnostics(hass, entry, device):
+async def async_get_device_diagnostics(
+    hass: HomeAssistant, entry: PleosConfigEntry, device: DeviceEntry
+) -> dict:
     coordinator = entry.runtime_data
     cars = _cars(coordinator)
     car_id = next((identifier for domain, identifier in device.identifiers if domain == DOMAIN), None)
