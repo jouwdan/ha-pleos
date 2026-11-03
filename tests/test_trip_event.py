@@ -10,7 +10,7 @@ from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import EntityPlatform
 
 from custom_components.pleos_vehicle_data import async_remove_entry
-from pleos_client import AuthError
+from pleos_client import ApiError, AuthError
 from custom_components.pleos_vehicle_data.const import DOMAIN
 from custom_components.pleos_vehicle_data.coordinator import PleosCoordinator
 from custom_components.pleos_vehicle_data.data import trip_summary, vehicle_id
@@ -124,6 +124,17 @@ class TripEventTests(HomeAssistantTestCase):
         # Home Assistant restores the last event after a restart (same event time); nothing new is fired.
         self.assertEqual(len({state.state for state in self.fired}), 1)
         self.assertEqual(len({state.attributes["trip_start"] for state in self.fired}), 1)
+
+    async def test_account_failure_marks_trip_unavailable_without_replaying_events(self):
+        self.serve(speed=[speed_trip(stamp(300), 10)])
+        await self.start()
+        event_time = self.hass.states.get('event.example_ev_trip').state
+        self.client.vehicles.side_effect = ApiError(503, 'fixture_failure')
+        await self.poll()
+        self.assertEqual(self.hass.states.get('event.example_ev_trip').state, 'unavailable')
+        self.client.vehicles.side_effect = None
+        await self.poll()
+        self.assertEqual(self.hass.states.get('event.example_ev_trip').state, event_time)
 
     async def test_failed_poll_fires_its_trips_on_the_next_successful_one(self):
         self.serve()

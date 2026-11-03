@@ -122,8 +122,8 @@ class EntityNameTests(HomeAssistantTestCase):
             self.assertEqual(self.hass.states.get(entity_id).state, "on")
             # Domain changes create a new entity; keep the old registry entry/history for the user.
             self.assertEqual(registry.async_get(legacy.entity_id), legacy)
-            for raw, expected in (("off", "off"), ("invalid", "unavailable"), (None, "unavailable"),
-                                  ("unexpected", "unavailable"), ("on", "on")):
+            for raw, expected in (("off", "off"), ("invalid", "unknown"), (None, "unknown"),
+                                  ("unexpected", "unknown"), ("on", "on")):
                 with self.subTest(raw=raw):
                     payload["ignition"]["status"] = raw
                     await self.coordinator.async_refresh()

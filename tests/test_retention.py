@@ -58,8 +58,9 @@ class RetentionTests(HomeAssistantTestCase):
                 car = await self.poll(ApiError(status, 'fixture_failure'))
                 for key, value in kept.items():
                     sensor = self.sensors[key]
-                    self.assertTrue(sensor.available, key)
-                    self.assertEqual(sensor.native_value, value)
+                    self.assertFalse(sensor.available, key)
+                    self.assertIsNone(sensor.native_value)
+                    self.assertEqual(car['readings'][key]['value'], value)
                     self.assertEqual(sensor.extra_state_attributes['reported_at'], reported)
                     self.assertGreaterEqual(sensor.extra_state_attributes['data_age_minutes'], 30)
                     self.assertTrue(sensor.extra_state_attributes['last_known'])
@@ -97,7 +98,9 @@ class RetentionTests(HomeAssistantTestCase):
             with self.subTest(response=response):
                 await self.seed()
                 await self.poll(response)
-                self.assertFalse(self.sensors['batteries_charge_stateofcharge'].available)
+                sensor = self.sensors['batteries_charge_stateofcharge']
+                self.assertEqual(sensor.available, not isinstance(response, ApiError) or response.code == '4045')
+                self.assertIsNone(sensor.native_value)
         await self.seed()
         self.coordinator.data['cars'][CAR_ID]['sources']['batteries'] = None
         car = await self.poll(ApiError(503, 'fixture_failure'))

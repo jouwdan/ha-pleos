@@ -35,4 +35,5 @@ class ReadingBinarySensor(VehicleEntity, BinarySensorEntity):
 
     @property
     def is_on(self):
-        return self.reading["value"] == "ON" if self.reading else None
+        value = self.reading["value"] if self.reading else None
+        return value == "ON" if value is not None else None

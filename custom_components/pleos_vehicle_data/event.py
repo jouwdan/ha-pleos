@@ -55,7 +55,7 @@ class TripEvent(CoordinatorEntity, EventEntity):
 
     @property
     def available(self):
-        return self.car_id in ((self.coordinator.data or {}).get("cars") or {})
+        return super().available and self.car_id in ((self.coordinator.data or {}).get("cars") or {})
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

@@ -50,7 +50,7 @@ The defaults work without further configuration. To change polling, disable loca
 
 For a ready-made dashboard with charging, range, doors, a map and trip graphs, follow the [example dashboard instructions](docs/configuration.md#example-dashboard).
 
-Readings may stay visible when old or temporarily unavailable from Pleos. Check their reporting time and `data_stale` attribute before using them in automations that need current data. [How data freshness works](docs/entities.md#data-freshness-and-retained-readings).
+Vehicle entities become unavailable when Pleos cannot be reached. A successful response with a missing current reading produces an unknown state. Successfully returned parked-car reports can still be old: check their reporting time and `data_stale` before using them in automations that need recent data. [How data freshness works](docs/entities.md#data-freshness-and-retained-readings).
 
 **Updating an existing installation?** Read the [upgrade guide](docs/upgrading.md) for capacity-unit, entity-ID and state changes.
 

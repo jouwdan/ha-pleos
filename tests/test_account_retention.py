@@ -52,7 +52,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
         self.client.retry_at = time.monotonic() + 300 if getattr(error, "status", None) == 429 else 0
         await self.coordinator.async_refresh()
 
-    async def test_consecutive_outages_keep_all_existing_states_and_recovery_replaces_them(self):
+    async def test_outages_hide_states_without_discarding_cached_data(self):
         reported = await self.seed()
         previous = self.coordinator.data
         original = deepcopy(previous)
@@ -70,7 +70,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
                 self.assertTrue(_coordinator_state(self.coordinator)["using_last_data"])
                 self.assertIs(self.coordinator.data, previous)
                 for key, entity in self.entities.items():
-                    self.assertTrue(entity.available, key)
+                    self.assertFalse(entity.available, key)
                     self.assertTrue(entity.extra_state_attributes["last_known"], key)
                     self.assertTrue(entity.extra_state_attributes["data_stale"], key)
                 battery = self.entities[BATTERY]
@@ -83,7 +83,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
                 self.assertEqual(ConnectionSensor(self.coordinator).native_value,
                                  "rate_limited" if status == 429 else "api_unavailable")
                 self.assertEqual(LastSuccessfulPollSensor(self.coordinator).native_value, poll)
-        self.assertEqual(updates.call_count, 3)
+        self.assertEqual(updates.call_count, 1)
         self.client.get.assert_not_awaited()
         self.assertEqual(previous, original)
         self.assertEqual(self.coordinator.archive.status, archive)
@@ -125,7 +125,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
                         # A later transport failure must not revive readings after access was rejected.
                         await self.fail_poll(ApiError(0, "connection_failed"))
                         self.assertFalse(battery.available)
-                        self.assertEqual(available, [True, False, False])
+                        self.assertEqual(available, [False])
                     finally:
                         unsubscribe()
 
@@ -149,7 +149,8 @@ class AccountRetentionTests(HomeAssistantTestCase):
                 self.payloads["batteries"] = payload
                 await self.coordinator.async_refresh()
                 self.assertFalse(self.coordinator.using_last_data)
-                self.assertFalse(self.entities[BATTERY].available)
+                self.assertTrue(self.entities[BATTERY].available)
+                self.assertIsNone(self.entities[BATTERY].native_value)
 
     async def test_removed_vehicle_is_not_revived_by_subsequent_failure(self):
         await self.seed()

@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -59,7 +59,6 @@ class PleosCoordinator(DataUpdateCoordinator):
         self.using_last_data = False
 
     async def _async_update_data(self):
-        self._previous_update_success = self.last_update_success
         can_keep_data = self.last_update_success or self.using_last_data
         self.using_last_data = False
         try:
@@ -112,13 +111,6 @@ class PleosCoordinator(DataUpdateCoordinator):
                 error.status in (0, 429) or 500 <= error.status < 600
             )
             raise UpdateFailed(str(error)) from None
-
-    @callback
-    def _async_refresh_finished(self):
-        super()._async_refresh_finished()
-        # Home Assistant skips notifications after consecutive failures; retained states still need updates.
-        if not self.last_update_success and not self._previous_update_success:
-            self.async_update_listeners()
 
     async def _update_car(self, car_id, vehicle, result, pending, now):
         car = {"vehicle": vehicle, "readings": {"vehicle_information": self._vehicle_information(vehicle)},
