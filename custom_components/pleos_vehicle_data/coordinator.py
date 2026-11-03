@@ -4,7 +4,6 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
-from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -78,7 +77,7 @@ class PleosCoordinator(DataUpdateCoordinator):
             if self.archive:
                 await self.archive.load()
                 self.archive.begin()
-                self.archive.add_vehicles(now, vehicles, self.client.response_meta.get("/v1/vehicles/consent", {}))
+                self.archive.add_vehicles(now, vehicles, self.client.vehicles_metadata)
             for vehicle in vehicles:
                 car_id = vehicle_id(self.account_id, vehicle["vin"])
                 car = await self._update_car(car_id, vehicle, result, pending, now)
@@ -175,7 +174,7 @@ class PleosCoordinator(DataUpdateCoordinator):
     def _vehicle_information(self, vehicle):
         attributes = {"vin": vehicle["vin"], "nickname": vehicle.get("nickname"),
                       "model_code": vehicle.get("name"), "model": vehicle.get("sellname"),
-                      "api_metadata": self.client.response_meta.get("/v1/vehicles/consent", {})}
+                      "api_metadata": self.client.vehicles_metadata}
         # Keep every other field Get Vehicles returns, without overwriting the named ones above.
         for field, value in vehicle.items():
             if field not in NAMED_VEHICLE_FIELDS and value is not None:
@@ -199,22 +198,11 @@ class PleosCoordinator(DataUpdateCoordinator):
             source["value"] = "error"
             source["attributes"] = {"http_status": 429, "error_code": "rate_limited"}
             return SKIPPED
-        path = f"/v1/vehicles/{quote(vehicle['vin'], safe='')}/{endpoint}"
         date_range = self.trips.query_range(car_id, endpoint, now) if endpoint in TRIP_ENDPOINTS else None
         try:
-            try:
-                data = await self.client.get(path + self._query(date_range))
-            except ApiError as error:
-                if not self._refused_range(date_range, error):
-                    raise
-                # The API's maximum range is undocumented. If two days work where the longer range
-                # failed, keep to two days from now on.
-                date_range = self.trips.query_range(car_id, endpoint, now, days=2)
-                data = await self.client.get(path + self._query(date_range))
-                LOGGER.info("Pleos refused a %s-day trip query (HTTP %s, code %s); querying two days from now on",
-                            self.trips.max_days, error.status, error.code)
-                self.trips.max_days = 2
+            response = await self.client.vehicle_data(vehicle["vin"], endpoint, date_range)
         except ApiError as error:
+            date_range = error.query
             if error.status == 429:
                 result["status"] = "rate_limited"
             source["value"] = "no_data" if error.code == "4045" else "error"
@@ -225,24 +213,17 @@ class PleosCoordinator(DataUpdateCoordinator):
                     self.trips.covered(car_id, endpoint, date_range)
             # An unsupported or failing endpoint must not hide other data.
             return SKIPPED
+        data, date_range = response.data, response.query
+        if self.client.trip_max_days is not None and self.trips.max_days != self.client.trip_max_days:
+            self.trips.max_days = self.client.trip_max_days
+            LOGGER.info("Pleos accepted a shorter trip query; querying %s days from now on", self.trips.max_days)
         if date_range:
             source["attributes"]["query"] = date_range
             self.trips.covered(car_id, endpoint, date_range)
-        source["attributes"]["api_metadata"] = self.client.response_meta.get(path, {})
+        source["attributes"]["api_metadata"] = response.metadata
         if isinstance(data, dict):
             source["attributes"]["data"] = data
         return data
-
-    @staticmethod
-    def _query(date_range):
-        return "?" + "&".join(f"{key}={value}" for key, value in date_range.items()) if date_range else ""
-
-    def _refused_range(self, date_range, error):
-        """A trip query longer than two days was refused as a bad request."""
-        if not date_range or self.trips.max_days <= 2 or error.status not in (400, 422) or error.code == "4045":
-            return False
-        start, end = (datetime.strptime(date_range[key], "%Y%m%d") for key in ("startDate", "endDate"))
-        return (end - start).days > 1
 
     def _apply_trips(self, car_id, car, endpoint, data, source, pending):
         rejections = Rejections(endpoint)

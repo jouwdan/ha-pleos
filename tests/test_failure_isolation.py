@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from pleos_client import ApiError, AuthError
+from pleos_client import ApiError, AuthError, PleosClient
 from custom_components.pleos_vehicle_data.const import DOMAIN, ENDPOINTS
 from custom_components.pleos_vehicle_data.coordinator import PleosCoordinator
 from custom_components.pleos_vehicle_data.sensor import ConnectionSensor
@@ -25,7 +25,7 @@ class FailureIsolationTests(unittest.IsolatedAsyncioTestCase):
             minor_version=1, source="user", options={}, discovery_keys={}, subentries_data=[],
             state=config_entries.ConfigEntryState.SETUP_IN_PROGRESS,
         )
-        self.client = MagicMock(response_meta={})
+        self.client = PleosClient(MagicMock(), "kia", "fixture-id", "fixture-secret")
         self.client.vehicles = AsyncMock(return_value=[{"vin": "SYNTHETIC-CAR-001", "type": "EV"}])
         self.sample = {"timestamp": datetime.now(timezone.utc).isoformat(), "charge": {"stateOfCharge": 50}}
         self.coordinator = PleosCoordinator(self.hass, self.entry, self.client)
