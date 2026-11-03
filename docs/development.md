@@ -6,7 +6,7 @@ The standards work starts from `v0.11.0` / `b61b450`, rather than the older 0.6.
 
 Use Python 3.14 and an isolated environment. Install `requirements-test.txt` for the declared minimum Home Assistant version (2026.10.0), or `requirements-test-current.txt` for the current CI target (2026.10.4). Both versions passed [hosted validation](https://github.com/jouwdan/ha-pleos/actions/runs/41636070774), including HACS and Hassfest. Local validation also passed on 2026.10.1. The existing unit tests are collected by pytest.
 
-Build/install the separately released `pleos-client` version pinned in the manifest. During release preparation its sibling source checkout can be installed instead. Build/install `packages/nominatim-reverse-client` as its own distribution. Then run:
+Install both published libraries at the versions pinned in `custom_components/pleos_vehicle_data/manifest.json`. Their source, tests and release workflows live in [`pleos-client`](https://github.com/jouwdan/pleos-client) and [`nominatim-reverse-client`](https://github.com/jouwdan/nominatim-reverse-client). Then run:
 
 ```sh
 python -m ruff check .
@@ -19,7 +19,7 @@ The workflow also checks every integration module against a threshold above 95%,
 
 ### Completed checks
 
-Development checkpoints were tested independently on Home Assistant 2026.10.1. They are combined into one 0.12.0 integration release:
+Development checkpoints were tested independently on Home Assistant 2026.10.1. They were combined into the [0.12.0 integration release](https://github.com/jouwdan/ha-pleos/releases/tag/v0.12.0):
 
 | Checkpoint | Tests | Branch coverage |
 | --- | --- | --- |
@@ -29,7 +29,9 @@ Development checkpoints were tested independently on Home Assistant 2026.10.1. T
 
 All three have 100% config-flow coverage and every integration module above 95%. Ruff passes. Hassfest reports zero invalid integrations. Independent review reproduced a deferred-refresh unload leak, then confirmed its regression test passes after the fix.
 
-Both library wheels pass tests on Python 3.11 and 3.14: `pleos-client` has 31 tests and 99% branch coverage; `nominatim-reverse-client` has 13 tests and 100% branch coverage. Strict mypy, Ruff, source/wheel builds, Twine checks and fresh-wheel installations pass locally and in hosted CI. Pleos 0.2.0 is published on PyPI; a fresh installation passed all 31 tests and `pip check`. Geocoder publication and the complete published-dependency validation remain release gates.
+Both library wheels pass tests on Python 3.11 and 3.14: `pleos-client` has 31 tests and 99% branch coverage; `nominatim-reverse-client` has 13 tests and 100% branch coverage. Strict mypy, Ruff, source/wheel builds, Twine checks and fresh-wheel installations passed locally and in hosted CI. Pleos 0.2.0 and geocoder 0.1.0 were published on PyPI before 0.12.0; fresh installations and the complete [published-dependency validation](https://github.com/jouwdan/ha-pleos/actions/runs/41643712111) passed.
+
+The 0.12.0 live pilot passed restart, account polling, manual refresh and config-entry reload checks, preserving entity identities, preferences and saved values. A real drive, charging session and natural outage recovery remain untested by that pilot.
 
 ## Upgrade invariants
 
@@ -61,27 +63,27 @@ Public lifecycle tests cover both legacy and current account namespaces. Dedicat
 | Default entities / dynamic translations / stale devices | Later stage: do not retire entities or delete registry entries during this work. |
 | Official tier / Core submission | Later stage: no official tier is claimed for this custom integration. Prepare the minimal Core submission separately. |
 
-## Preparing the single 0.12.0 release
+## Library ownership
 
-The integration branch `codex/ha-standards-stages-1-4` contains one commit per fix for review, all targeting 0.12.0. The dependency changes were merged in [pleos-client PR #1](https://github.com/jouwdan/pleos-client/pull/1) for [client 0.2.0](https://github.com/jouwdan/pleos-client/releases/tag/v0.2.0). The library releases below are prerequisites, not separate Home Assistant releases.
+Both libraries are maintained and released in their own repositories. The geocoder's `publish-geocoder.yml` workflow belongs to `jouwdan/nominatim-reverse-client`; its PyPI trusted publisher uses the protected `pypi-nominatim-reverse-client` environment. Release tags there are `v<version>`, matching `pyproject.toml`. See the [library release instructions](https://github.com/jouwdan/nominatim-reverse-client#releases).
 
-Normal PR validation builds the in-repository geocoder and installs the pinned `pleos-client` 0.2.0 from PyPI. The manifest pins both public package versions. This lets the HA matrix test the geocoder candidate before publication; a green PR run does **not** prove the geocoder is on PyPI.
+The integration pins geocoder 0.1.1, which updates repository metadata after extraction without changing client behavior. The historical 0.12.0 integration release continues to pin geocoder 0.1.0.
 
-For the release check, run **Validate → Run workflow → Release check: install the pinned libraries from PyPI** on the reviewed integration branch. That mode skips the local geocoder build and runs the complete matrix against packages installed from PyPI in fresh containers. Version tags also use this mode. There is no fallback to local wheels when a published dependency is missing.
+## Preparing an integration release
+
+Every integration validation run installs both manifest-pinned libraries from PyPI in fresh Home Assistant containers. There is no local package build or fallback when a published dependency is missing. Library releases must therefore be published and verified before updating the integration's pins.
 
 Release checklist:
 
-1. Review both PRs and require passing hosted CI, including HA 2026.10.0/2026.10.4 and both library Python versions. Merge the reviewed code without publishing the integration yet.
-2. **Complete:** `pleos-client` 0.2.0 was published through its approved GitHub Release/OIDC workflow; its PyPI wheel and source distribution are available and its fresh installation passed validation.
-3. Configure the geocoder's PyPI trusted publisher and protected environment, then push `nominatim-reverse-client-v0.1.0` at the reviewed package commit. **Do not create a GitHub Release for this package tag**; HACS uses this repository's GitHub Releases for the integration. See the [package instructions](../packages/nominatim-reverse-client/README.md#release-gate).
-4. Verify both packages' wheels and source distributions are available from PyPI. Run the published-dependency check above and test a clean installation and upgrade, preserving the invariants listed here.
-5. Pilot the complete candidate on a real installation through a drive, charging, parked reports, restart, manual refresh and recovery. Automated synthetic responses do not replace this pilot.
-6. Publish the tested integration commit as **v0.12.0**, with the [0.12.0 upgrade notes](upgrading.md#availability-refresh-reliability-and-api-clients-in-0120), once all checks pass. The existing HACS repository layout needs no custom ZIP. The rollback procedure is included in those notes.
+1. Review any library changes and require passing library CI. Publish those changes from their own repositories, then verify the PyPI wheels, source distributions and fresh installations.
+2. Update the integration's dependency pins as needed and require passing hosted CI, including HA 2026.10.0/2026.10.4, HACS and Hassfest. Merge the reviewed integration code without publishing it yet.
+3. Test a clean installation and upgrade, preserving the invariants listed here. Pilot the candidate through a drive, charging, parked reports, restart, manual refresh and recovery; record any untested scenarios. Automated synthetic responses do not replace this pilot.
+4. Update the integration version and [upgrade notes](upgrading.md), then publish the tested commit with a matching `v<version>` tag and GitHub Release. GitHub Releases in this repository belong to the integration and are consumed by HACS. The existing repository layout needs no custom ZIP.
 
-For a merged candidate, the published-dependency check can also be started with:
+For a merged candidate, validation can also be started with:
 
 ```sh
-gh workflow run validate.yml --ref main -f published_dependencies=true
+gh workflow run validate.yml --ref main
 ```
 
 No tag or publication is implied by the manifest version or these notes.
