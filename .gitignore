@@ -2,4 +2,11 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+.coverage
+.coverage.*
+.ruff_cache/
+coverage.json
+build/
+dist/
+*.egg-info/
 .DS_Store

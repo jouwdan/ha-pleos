@@ -25,17 +25,29 @@ jobs:
         uses: home-assistant/actions/hassfest@master
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - homeassistant: "2026.10.0"
+            requirements: requirements-test.txt
+          - homeassistant: "2026.10.4"
+            requirements: requirements-test-current.txt
     steps:
       - uses: actions/checkout@v5
       - name: Test against Home Assistant Core
-        run: >-
-          docker run --rm --entrypoint sh
-          -e COVERAGE_FILE=/tmp/.coverage
-          -v "$GITHUB_WORKSPACE:/src:ro" -w /src
-          ghcr.io/home-assistant/home-assistant:2026.10.1
-          -c 'python -c "import json, subprocess, sys;
-          subprocess.run([sys.executable, \"-m\", \"pip\", \"install\",
-          *json.load(open(\"custom_components/pleos_vehicle_data/manifest.json\"))[\"requirements\"]], check=True)" &&
-          python -m coverage run --branch --source=custom_components.pleos_vehicle_data
-          -m unittest discover -s tests -v &&
-          python -m coverage report --include="*/config_flow.py" --fail-under=100'
+        run: |
+          docker run --rm --entrypoint sh \
+            -e COVERAGE_FILE=/tmp/.coverage \
+            -e TEST_REQUIREMENTS=${{ matrix.requirements }} \
+            -v "$GITHUB_WORKSPACE:/src:ro" -w /src \
+            ghcr.io/home-assistant/home-assistant:${{ matrix.homeassistant }} \
+            -c 'set -eu
+            python -m pip install -r "$TEST_REQUIREMENTS"
+            python -c "import json, subprocess, sys; subprocess.run([sys.executable, \"-m\", \"pip\", \"install\", *json.load(open(\"custom_components/pleos_vehicle_data/manifest.json\"))[\"requirements\"]], check=True)"
+            python -m ruff check --no-cache .
+            python -m coverage run -m pytest -q -p no:cacheprovider
+            python -m coverage report
+            python -m coverage report --include="*/config_flow.py" --fail-under=100
+            for module in custom_components/pleos_vehicle_data/*.py; do
+              python -m coverage report --include="$module" --fail-under=95.01 > /tmp/module-coverage || { cat /tmp/module-coverage; exit 1; }
+            done'

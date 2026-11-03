@@ -47,7 +47,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
             self.coordinator, CAR_ID, "location", {"name": "Location", "source": "locations"})
         return reported
 
-    async def fail(self, error):
+    async def fail_poll(self, error):
         self.client.vehicles.side_effect = error
         self.client.retry_at = time.monotonic() + 300 if getattr(error, "status", None) == 429 else 0
         await self.coordinator.async_refresh()
@@ -65,7 +65,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
         self.client.get.reset_mock()
         for status in (0, 503, 429):
             with self.subTest(status=status):
-                await self.fail(ApiError(status, "fixture_failure"))
+                await self.fail_poll(ApiError(status, "fixture_failure"))
                 self.assertFalse(self.coordinator.last_update_success)
                 self.assertTrue(_coordinator_state(self.coordinator)["using_last_data"])
                 self.assertIs(self.coordinator.data, previous)
@@ -118,12 +118,12 @@ class AccountRetentionTests(HomeAssistantTestCase):
                     available = []
                     unsubscribe = self.coordinator.async_add_listener(lambda: available.append(battery.available))
                     try:
-                        await self.fail(ApiError(0, "connection_failed"))
-                        await self.fail(failure)
+                        await self.fail_poll(ApiError(0, "connection_failed"))
+                        await self.fail_poll(failure)
                         self.assertFalse(self.coordinator.using_last_data)
                         self.assertFalse(battery.available)
                         # A later transport failure must not revive readings after access was rejected.
-                        await self.fail(ApiError(0, "connection_failed"))
+                        await self.fail_poll(ApiError(0, "connection_failed"))
                         self.assertFalse(battery.available)
                         self.assertEqual(available, [True, False, False])
                     finally:
@@ -144,7 +144,7 @@ class AccountRetentionTests(HomeAssistantTestCase):
         for payload in (None, {"timestamp": stamp(), "charge": {"stateOfCharge": 101}}):
             with self.subTest(payload=payload):
                 await self.seed()
-                await self.fail(ApiError(0, "connection_failed"))
+                await self.fail_poll(ApiError(0, "connection_failed"))
                 self.client.vehicles.side_effect = None
                 self.payloads["batteries"] = payload
                 await self.coordinator.async_refresh()
@@ -153,13 +153,13 @@ class AccountRetentionTests(HomeAssistantTestCase):
 
     async def test_removed_vehicle_is_not_revived_by_subsequent_failure(self):
         await self.seed()
-        await self.fail(ApiError(0, "connection_failed"))
+        await self.fail_poll(ApiError(0, "connection_failed"))
         self.client.vehicles.side_effect = None
         self.client.vehicles.return_value = []
         await self.coordinator.async_refresh()
         for entity in self.entities.values():
             self.assertFalse(entity.available)
         self.assertEqual(await self.coordinator.ranges.store.async_load(), {})
-        await self.fail(ApiError(0, "connection_failed"))
+        await self.fail_poll(ApiError(0, "connection_failed"))
         for entity in self.entities.values():
             self.assertFalse(entity.available)

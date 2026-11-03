@@ -4,6 +4,9 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.pleos_vehicle_data.geocode import ReverseGeocoder
+from custom_components.pleos_vehicle_data.data import vehicle_id
+from custom_components.pleos_vehicle_data.sensor import ReadingSensor
+from support import CAR, HomeAssistantTestCase, stamp
 
 
 class ReverseGeocoderTest(unittest.IsolatedAsyncioTestCase):
@@ -150,9 +153,6 @@ class GeocodingSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(geocoder.cache), {(2, 10), (3, 10)})
 
 
-from support import CAR, HomeAssistantTestCase, stamp
-from custom_components.pleos_vehicle_data.data import vehicle_id
-from custom_components.pleos_vehicle_data.sensor import ReadingSensor
 
 
 class GeocodingIntegrationTests(HomeAssistantTestCase):
