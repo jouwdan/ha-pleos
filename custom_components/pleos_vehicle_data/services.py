@@ -26,7 +26,7 @@ async def _async_refresh(call: ServiceCall) -> None:
             translation_key="entry_not_loaded",
             translation_placeholders={"title": entry.title},
         )
-    await entry.runtime_data.async_request_refresh()
+    await entry.runtime_data.async_refresh_for_service()
 
 
 @callback

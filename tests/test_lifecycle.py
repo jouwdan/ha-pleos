@@ -1,11 +1,13 @@
 """Real platform setup, reload and removal through Home Assistant."""
 
+import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 from pleos_client import ApiError, AuthError
@@ -139,3 +141,45 @@ async def test_existing_account_storage_survives_setup_and_reload(
         assert saved[car_id]["estimate"] == window
         assert await fired_store(hass, pleos_entry.entry_id).async_load() == fired
         assert await hass.config_entries.async_unload(pleos_entry.entry_id)
+
+
+@pytest.mark.parametrize("deferred", [False, True])
+async def test_unload_cancels_an_inflight_manual_poll(
+    hass: HomeAssistant, pleos_entry: MockConfigEntry, pleos_api: dict[str, AsyncMock],
+    deferred: bool,
+) -> None:
+    """An action ends cleanly and its network request cannot outlive its entry."""
+    pleos_api["vehicles"].return_value = []
+    assert await hass.config_entries.async_setup(pleos_entry.entry_id)
+    await hass.async_block_till_done()
+    if deferred:
+        pleos_entry.runtime_data._debounced_refresh.cooldown = 0.01
+        await hass.services.async_call(
+            DOMAIN, "refresh", {"config_entry_id": pleos_entry.entry_id}, blocking=True,
+        )
+    started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def slow_request() -> list[dict]:
+        started.set()
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return []
+
+    pleos_api["vehicles"].side_effect = slow_request
+    action = asyncio.create_task(hass.services.async_call(
+        DOMAIN, "refresh", {"config_entry_id": pleos_entry.entry_id}, blocking=True,
+    ))
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        assert await hass.config_entries.async_unload(pleos_entry.entry_id)
+        with pytest.raises(HomeAssistantError) as raised:
+            await asyncio.wait_for(action, 1)
+        assert raised.value.translation_key == "refresh_cancelled"
+        assert cancelled.is_set()
+    finally:
+        release.set()
+        await asyncio.gather(action, return_exceptions=True)
+        await hass.async_block_till_done()

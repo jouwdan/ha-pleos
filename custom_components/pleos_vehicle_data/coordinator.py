@@ -1,18 +1,19 @@
 """Fetch each account once and share its data across all vehicle entities."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .account import account_id
 from pleos_client import ApiError, AuthError, PleosClient
 from .archive import ResponseArchive
-from .const import BRANDS, DEFAULT_OPTIONS, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
+from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
 from .data import (Rejections, finite_number, identifier, location, new_trips, readings, reported_age, trip_readings,
                    trip_summary, vehicle_id)
 from .economy import EVEconomy
@@ -57,8 +58,48 @@ class PleosCoordinator(DataUpdateCoordinator):
         )
         self.last_successful_poll = None
         self.using_last_data = False
+        self._refresh_waiters: set[asyncio.Future[bool]] = set()
+        self._poll_tasks: set[asyncio.Task] = set()
+
+    async def async_refresh_for_service(self) -> None:
+        """Wait for the next completed poll, including a poll already in progress."""
+        if self._shutdown_requested:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="refresh_cancelled")
+        completed = self.hass.loop.create_future()
+        self._refresh_waiters.add(completed)
+        try:
+            try:
+                await asyncio.shield(self.config_entry.async_create_background_task(
+                    self.hass, self.async_request_refresh(), "Pleos manual refresh"
+                ))
+            except asyncio.CancelledError:
+                if self._shutdown_requested:
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN, translation_key="refresh_cancelled"
+                    ) from None
+                raise
+            if not await completed:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="refresh_cancelled" if self._shutdown_requested else "refresh_failed",
+                )
+        finally:
+            self._refresh_waiters.discard(completed)
+
+    async def async_shutdown(self) -> None:
+        await super().async_shutdown()
+        # HA's debouncer starts deferred polls outside the entry's task collection.
+        polls = tuple(self._poll_tasks)
+        for task in polls:
+            task.cancel()
+        await asyncio.gather(*polls, return_exceptions=True)
+        for completed in self._refresh_waiters:
+            if not completed.done():
+                completed.set_result(False)
 
     async def _async_update_data(self):
+        task = asyncio.current_task()
+        self._poll_tasks.add(task)
         can_keep_data = self.last_update_success or self.using_last_data
         self.using_last_data = False
         try:
@@ -111,6 +152,20 @@ class PleosCoordinator(DataUpdateCoordinator):
                 error.status in (0, 429) or 500 <= error.status < 600
             )
             raise UpdateFailed(str(error)) from None
+        finally:
+            self._poll_tasks.discard(task)
+
+    @callback
+    def _async_refresh_finished(self):
+        super()._async_refresh_finished()
+        success = self.last_update_success and all(
+            car["readings"][identifier(endpoint) + "_api"]["value"] != "error"
+            for car in (self.data or {}).get("cars", {}).values()
+            for endpoint in ENDPOINTS
+        )
+        for completed in self._refresh_waiters:
+            if not completed.done():
+                completed.set_result(success)
 
     async def _update_car(self, car_id, vehicle, result, pending, now):
         car = {"vehicle": vehicle, "readings": {"vehicle_information": self._vehicle_information(vehicle)},

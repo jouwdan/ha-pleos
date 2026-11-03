@@ -43,7 +43,7 @@ Pleos account credentials are not options: replace them with **⋮ → Reconfigu
 
 ## Refresh on demand
 
-Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in Home Assistant's action editor or an automation, and select the **Account** to refresh. It requests another poll of that account without waiting for its normal polling interval. Repeated requests are batched, and trip polling intervals and API rate-limit backoff still apply.
+Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in Home Assistant's action editor or an automation, and select the **Account** to refresh. It waits for the requested or already running poll to complete. Repeated requests are batched, and trip polling intervals and API rate-limit backoff still apply. A failed account request or requested endpoint raises an action error; healthy endpoints still update. Disabling an endpoint, reusing trips between scheduled polls, and a successful `no_data` response are not failures. Unloading the account before completion also reports an action error.
 
 This fetches data already available in Pleos. It cannot wake the car or make it upload new readings, so the returned values may be unchanged.
 

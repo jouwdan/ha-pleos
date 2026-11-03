@@ -734,6 +734,12 @@
     },
     "entry_not_loaded": {
       "message": "{title} is not loaded."
+    },
+    "refresh_failed": {
+      "message": "The Pleos refresh failed. Check the account connection and endpoint diagnostics, then try again."
+    },
+    "refresh_cancelled": {
+      "message": "The Pleos account was unloaded before the refresh completed. Try again after it has loaded."
     }
   }
 }
