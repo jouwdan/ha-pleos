@@ -60,6 +60,7 @@ Readings may stay visible when old or temporarily unavailable from Pleos. Check 
 | --- | --- |
 | Fix setup, missing vehicles or expired keys | [Troubleshooting](docs/troubleshooting.md) |
 | Install manually, change options or refresh on demand | [Configuration](docs/configuration.md) |
+| Remove an account or uninstall the integration | [Removal](docs/configuration.md#removing-the-integration) |
 | Understand sensors, units and retained readings | [Entity reference](docs/entities.md) |
 | Use trip events, statistics or raw archives | [Trip guide](docs/trips.md) |
 | Compare this with Kia Uvo / Hyundai Bluelink | [kia_uvo comparison](docs/kia-uvo-comparison.md) |

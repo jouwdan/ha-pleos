@@ -47,6 +47,16 @@ Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in
 
 This fetches data already available in Pleos. It cannot wake the car or make it upload new readings, so the returned values may be unchanged.
 
+## Removing the integration
+
+1. Open **Settings → Devices & services → Pleos Vehicle Data**. On the account entry, choose **⋮ → Delete** and confirm. Repeat for other accounts you want to remove.
+2. Removing an account deletes its saved ranges and tyre pressures, EV-consumption totals and checkpoints, trip tracking and imported trip statistics. Export anything you need first. Ordinary entity history follows Home Assistant's recorder retention policy.
+3. Raw archive files remain in `<config>/pleos_vehicle_data/archive/`. Delete the relevant account folder yourself if you no longer want it; keep folders belonging to accounts you still use.
+4. If you no longer use the personal API key elsewhere, revoke it in Pleos Playground's **My Vehicle Data API** key-management page. Also revoke a separate geocoding-provider key if you no longer use it.
+5. After removing all accounts, uninstall **Pleos Vehicle Data** through HACS and restart Home Assistant. For a manual installation, remove `<config>/custom_components/pleos_vehicle_data` and restart instead.
+
+To replace credentials or temporarily stop polling, use reconfiguration or disable the account; deleting and adding it again creates a new account namespace and does not restore its derived totals.
+
 ## Example dashboard
 
 [`examples/dashboard.yaml`](../examples/dashboard.yaml) uses built-in cards for charge, range, doors, climate, a 48-hour map, trip summaries, 7-day graphs and data age.

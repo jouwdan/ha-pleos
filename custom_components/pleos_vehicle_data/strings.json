@@ -11,6 +11,7 @@
           "client_secret": "Client Secret"
         },
         "data_description": {
+          "brand": "Choose the manufacturer used when creating this personal API key.",
           "client_id": "Copy the Client ID from My Vehicle Data API in Pleos Playground.",
           "client_secret": "Copy the matching Client Secret. Home Assistant saves it in its private configuration."
         }
