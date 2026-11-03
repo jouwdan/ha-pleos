@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      published_dependencies:
+        description: "Release check: install the pinned libraries from PyPI"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,16 +40,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Test against Home Assistant Core
+        env:
+          PUBLISHED_DEPENDENCIES: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.published_dependencies == true }}
         run: |
           docker run --rm --entrypoint sh \
             -e COVERAGE_FILE=/tmp/.coverage \
             -e TEST_REQUIREMENTS=${{ matrix.requirements }} \
+            -e PUBLISHED_DEPENDENCIES \
             -v "$GITHUB_WORKSPACE:/src:ro" -w /src \
             ghcr.io/home-assistant/home-assistant:${{ matrix.homeassistant }} \
             -c 'set -eu
             python -m pip install -r "$TEST_REQUIREMENTS"
-            python -c "import json, subprocess, sys; subprocess.run([sys.executable, \"-m\", \"pip\", \"install\", *json.load(open(\"custom_components/pleos_vehicle_data/manifest.json\"))[\"requirements\"]], check=True)"
+            if [ "$PUBLISHED_DEPENDENCIES" != true ]; then
+              cp -R packages/nominatim-reverse-client /tmp/nominatim-reverse-client
+              python -m pip wheel --no-deps --wheel-dir=/tmp/wheels /tmp/nominatim-reverse-client
+              python -m pip install /tmp/wheels/*.whl
+            fi
+            python -c "import json, subprocess, sys; subprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"--no-cache-dir\", \"--index-url\", \"https://pypi.org/simple\", *json.load(open(\"custom_components/pleos_vehicle_data/manifest.json\"))[\"requirements\"]], check=True)"
             python -m ruff check --no-cache .
+            python -m pytest -q packages/nominatim-reverse-client/tests -p no:cacheprovider
             python -m coverage run -m pytest -q -p no:cacheprovider
             python -m coverage report
             python -m coverage report --include="*/config_flow.py" --fail-under=100

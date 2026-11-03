@@ -237,6 +237,7 @@ class GeocodingIntegrationTests(HomeAssistantTestCase):
         from aiohttp import ClientError
         self.coordinator.options["reverse_geocode"] = True
         self.coordinator.geocoder.service_url = "https://geo.example/reverse"
+        self.coordinator.geocoder.client.service_url = "https://geo.example/reverse"
         self.client.session.get.side_effect = ClientError("private request details")
         await self.populate({"timestamp": stamp(), "charge": {"stateOfCharge": 50},
                              "location": {"type": 0, "latitude": 55.1, "longitude": 10.1}})
