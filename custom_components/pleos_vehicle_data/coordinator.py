@@ -244,6 +244,7 @@ class PleosCoordinator(DataUpdateCoordinator):
         if result["status"] == "rate_limited":
             source["value"] = "error"
             source["attributes"] = {"http_status": 429, "error_code": "rate_limited"}
+            self._log_endpoint_transition(car_id, endpoint, source)
             return SKIPPED
         date_range = self.trips.query_range(car_id, endpoint, now) if endpoint in TRIP_ENDPOINTS else None
         try:
@@ -259,6 +260,7 @@ class PleosCoordinator(DataUpdateCoordinator):
                 if error.code == "4045":
                     self.trips.covered(car_id, endpoint, date_range)
             # An unsupported or failing endpoint must not hide other data.
+            self._log_endpoint_transition(car_id, endpoint, source)
             return SKIPPED
         data, date_range = response.data, response.query
         if self.client.trip_max_days is not None and self.trips.max_days != self.client.trip_max_days:
@@ -270,7 +272,20 @@ class PleosCoordinator(DataUpdateCoordinator):
         source["attributes"]["api_metadata"] = response.metadata
         if isinstance(data, dict):
             source["attributes"]["data"] = data
+        self._log_endpoint_transition(car_id, endpoint, source)
         return data
+
+    def _log_endpoint_transition(self, car_id, endpoint, source):
+        previous = (self.data or {}).get("cars", {}).get(car_id, {}).get("readings", {}).get(
+            identifier(endpoint) + "_api", {}
+        )
+        failed = source["value"] == "error"
+        if failed and previous.get("value") != "error":
+            LOGGER.warning("Pleos %s for %s is unavailable (HTTP %s, code %s)",
+                           endpoint, car_id, source["attributes"].get("http_status"),
+                           source["attributes"].get("error_code"))
+        elif not failed and previous.get("value") == "error":
+            LOGGER.info("Pleos %s for %s recovered", endpoint, car_id)
 
     def _apply_trips(self, car_id, car, endpoint, data, source, pending):
         rejections = Rejections(endpoint)
