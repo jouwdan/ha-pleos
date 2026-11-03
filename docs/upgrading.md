@@ -4,6 +4,24 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Availability, refresh reliability and API clients in 0.12.0
+
+Vehicle entities now become **unavailable** when the account request fails. A failed individual endpoint makes its current readings unavailable while healthy endpoints still update. Successfully fetched current readings with missing/invalid values or reporting times become **unknown**, including ranges and tyre pressures available only from the saved cache. A successfully returned old parked-car snapshot remains available with its original reporting time and stale-data attributes.
+
+The saved range/tyre cache, cumulative EV-consumption totals and counting checkpoints are preserved. Historical trip results and cumulative consumption can remain visible during isolated endpoint gaps; a whole-account failure makes their entities unavailable. Outages never erase these stores. Entity IDs, account namespaces, user unit choices, odometer correction and existing history are unchanged.
+
+**Review automations that expect retained numeric states.** Guard calculations with `has_value('sensor.your_entity')`, and check `data_stale` when recent data is required. Do not convert unknown/unavailable to zero for charging, pressure or range decisions. The Refresh action now waits for its poll and raises an action error on an account or requested-endpoint failure; automations which need to continue after failure can use Home Assistant's `continue_on_error` deliberately.
+
+The integration requires `pleos-client==0.2.0` and `nominatim-reverse-client==0.1.0`. Both packages must be published before this release is distributed. The latter is a separate library for the optional user-selected geocoder; updating does not enable reverse geocoding or select a provider.
+
+This change does not change persistent storage formats or credentials. To roll back a pilot, reinstall the previous integration release and restart; Home Assistant installs that release's pinned dependencies. Keep a full Home Assistant backup before testing, and do not delete/recreate the account as a rollback procedure because removal clears its derived data.
+
+Pleos URL construction, trip-query encoding and range fallback move into `pleos-client`. Reverse-geocoding HTTP handling moves into its own package while Home Assistant keeps the opt-in settings, cache and address-state handling. Endpoint results, polling schedules, IDs and stores are preserved.
+
+Public Home Assistant setup, reload, unload and configuration-flow tests now supplement the existing unit tests. Configuration errors are retried within the same flow; replacement credentials preserve IDs, options and odometer calibration. CI targets the minimum supported and current Home Assistant versions, config-flow branch coverage, per-module coverage and Python linting; see the [validation status](development.md#reproduce-validation) for completed local checks and outstanding gates. [Removal instructions](configuration.md#removing-the-integration) now describe retained archives and deleted derived data.
+
+Existing polling intervals, calibration, location/privacy choices and storage options remain unchanged. Polling-option removal is deferred to a later release with its own migration notice.
+
 ## Cumulative EV consumption in 0.11.0
 
 **Estimated EV consumption** now combines valid observed energy and distance across charging cycles. It retains the cumulative average through charging, missing data and restarts. Each new continuous period must still cover at least 10 km and a 5-percentage-point battery drop before contributing; invalid reports and gaps are excluded. See [estimated EV consumption](entities.md#estimated-ev-consumption).
