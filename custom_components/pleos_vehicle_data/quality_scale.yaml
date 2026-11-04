@@ -1,0 +1,109 @@
+# Formal Core readiness, not an awarded tier. See docs/quality-scale.md for evidence.
+rules:
+  # Bronze
+  action-setup: done
+  appropriate-polling: done
+  brands:
+    status: todo
+    comment: Local custom-integration icons exist; official home-assistant/brands assets are not submitted.
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency: done
+  docs-actions:
+    status: todo
+    comment: Local configuration guide documents refresh; home-assistant.io publication is pending Core submission.
+  docs-conditions:
+    status: exempt
+    comment: No integration-specific condition platform; automations use Home Assistant's built-in conditions.
+  docs-high-level-description:
+    status: todo
+    comment: README describes the service and read-only scope; home-assistant.io publication is pending.
+  docs-installation-instructions:
+    status: todo
+    comment: README and configuration guide cover custom installation and setup; Core installation docs are pending.
+  docs-removal-instructions:
+    status: todo
+    comment: Local configuration guide documents removal and retained archives; home-assistant.io publication is pending.
+  docs-triggers:
+    status: exempt
+    comment: No integration-specific trigger platform; Trip event entities use built-in event triggers, documented locally.
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry:
+    status: todo
+    comment: Duplicate keys and vehicle overlap are rejected; empty accounts lack registry evidence and a validated account ID.
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: todo
+    comment: Local configuration guide lists all options; home-assistant.io publication is pending.
+  docs-installation-parameters:
+    status: todo
+    comment: README and configuration guide explain brand, credentials and odometer selection; Core docs are pending.
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow:
+    status: todo
+    comment: Vehicle continuity and explicit confirmation guard renewal, but cannot prove replacement-key account identity.
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: exempt
+    comment: The personal cloud API has no network or bus discovery mechanism; users supply account credentials.
+  discovery-update-info:
+    status: exempt
+    comment: Cloud API endpoints have no discoverable per-device network address to update.
+  docs-data-update:
+    status: todo
+    comment: Local configuration and trip guides cover cadence, freshness and delayed trips; Core docs are pending.
+  docs-examples:
+    status: todo
+    comment: docs/examples.md has guarded battery and trip automations; home-assistant.io publication is pending.
+  docs-known-limitations:
+    status: todo
+    comment: Local troubleshooting and entity guides explain limitations; home-assistant.io publication is pending.
+  docs-supported-devices:
+    status: todo
+    comment: Local supported-vehicles guide distinguishes the tested car from documented models; Core docs are pending.
+  docs-supported-functions:
+    status: todo
+    comment: Local entity and trip guides describe supported functions; home-assistant.io publication is pending.
+  docs-troubleshooting:
+    status: todo
+    comment: Local troubleshooting guide covers keys, missing vehicles and diagnostics; Core docs are pending.
+  docs-use-cases:
+    status: todo
+    comment: README, dashboard and automation examples cover practical use cases; Core docs are pending.
+  dynamic-devices: done
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations:
+    status: todo
+    comment: Supported fields are translated; legacy undocumented entities keep generated names for compatibility, pending Core review.
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow:
+    status: todo
+    comment: Key replacement preserves IDs and requires continuity or explicit confirmation; account identity remains unproven.
+  repair-issues: done
+  stale-devices: done
+
+  # Platinum
+  async-dependency: done
+  inject-websession: done
+  strict-typing:
+    status: todo
+    comment: All integration modules pass strict mypy and both libraries ship py.typed; Core .strict-typing registration is pending.
