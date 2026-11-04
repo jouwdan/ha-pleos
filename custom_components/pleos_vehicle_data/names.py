@@ -1,7 +1,8 @@
 """Supported entity names and translations for documented vehicle fields.
 
 strings.json and translations/en.json carry the same names; a test keeps them in step.
-Existing undocumented entities retain their generated names for compatibility.
+Existing undocumented entities use a separate translated legacy label; that template
+does not add fields to this supported discovery catalog.
 """
 
 import re

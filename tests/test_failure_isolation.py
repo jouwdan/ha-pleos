@@ -20,11 +20,14 @@ class FailureIsolationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.hass = HomeAssistant(self.temp.name)
+        self.hass.config_entries = config_entries.ConfigEntries(self.hass, {})
         self.entry = config_entries.ConfigEntry(
-            data={"brand": "kia"}, domain=DOMAIN, title="Kia", unique_id="kia", version=1,
+            data={"brand": "kia", "client_id": "fixture-id", "client_secret": "fixture-secret"},
+            domain=DOMAIN, title="Kia", unique_id="kia", version=1,
             minor_version=1, source="user", options={}, discovery_keys={}, subentries_data=[],
             state=config_entries.ConfigEntryState.SETUP_IN_PROGRESS,
         )
+        self.hass.config_entries._entries[self.entry.entry_id] = self.entry
         self.client = PleosClient(MagicMock(), "kia", "fixture-id", "fixture-secret")
         self.client.vehicles = AsyncMock(return_value=[{"vin": "SYNTHETIC-CAR-001", "type": "EV"}])
         self.sample = {"timestamp": datetime.now(timezone.utc).isoformat(), "charge": {"stateOfCharge": 50}}

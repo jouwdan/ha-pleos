@@ -21,10 +21,18 @@ def credential_id(brand: str, client_id: str) -> str:
     return brand + "_" + hashlib.sha256(client_id.strip().encode()).hexdigest()
 
 
+def vehicle_ids(namespace: str, vins: Iterable[str]) -> list[str]:
+    """Keep individual vehicle evidence separate from the account's identity."""
+    return sorted({vehicle_id(namespace, vin) for vin in vins})
+
+
 def has_known_vehicle(hass: HomeAssistant, entry: PleosConfigEntry, vins: Iterable[str]) -> bool:
-    """Check vehicle continuity using registry evidence, including unloaded entries."""
+    """Check saved vehicle evidence even before devices have been registered."""
     registered = {
         identifier for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
         for domain, identifier in device.identifiers if domain == DOMAIN
     }
+    saved = entry.data.get("known_vehicle_ids", [])
+    if isinstance(saved, list):
+        registered.update(identifier for identifier in saved if isinstance(identifier, str))
     return any(vehicle_id(account_id(entry), vin) in registered for vin in vins)

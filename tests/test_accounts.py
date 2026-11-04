@@ -24,8 +24,8 @@ from support import CAR, HomeAssistantTestCase, NEW, OLD, entry, stamp
 
 
 class AccountTests(HomeAssistantTestCase):
-    async def add_account(self):
-        with patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[CAR])):
+    async def add_account(self, car=CAR):
+        with patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[car])):
             flow = self.flow()
             form = await flow.async_step_user(NEW | {'brand': 'kia'})
             created = await flow.async_step_odometer(form['data_schema']({}))
@@ -48,27 +48,29 @@ class AccountTests(HomeAssistantTestCase):
                 request.assert_not_called()
 
     async def test_replacement_preserves_namespaces_and_cannot_claim_another_accounts_key(self):
-        second = await self.add_account()
-        for current in (self.entry, second):
+        other_car = CAR | {'vin': 'SYNTHETIC-CAR-002'}
+        second = await self.add_account(other_car)
+        for current, car in ((self.entry, CAR), (second, other_car)):
             flow = self.flow('reconfigure')
             before = account_id(current)
-            car_id = vehicle_id(before, CAR['vin'])
+            car_id = vehicle_id(before, car['vin'])
             archive = PleosCoordinator(self.hass, current, self.client)
             folder = archive.archive.directory
             self.addAsyncCleanup(archive.async_shutdown)
             replacement = {'client_id': 'rotated-' + current.entry_id, 'client_secret': 'fixture-secret'}
             with patch.object(flow, '_get_reconfigure_entry', return_value=current), \
-                 patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[CAR])), \
+                 patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[car])), \
                  patch.object(self.hass.config_entries, 'async_schedule_reload'):
                 result = await flow.async_step_reconfigure(replacement)
-                self.assertEqual(result['step_id'], 'confirm_account')
-                result = await flow.async_step_confirm_account({'confirm_same_account': True})
+                if current is self.entry:
+                    self.assertEqual(result['step_id'], 'confirm_account')
+                    result = await flow.async_step_confirm_account({'confirm_same_account': True})
             self.assertEqual(result['reason'], 'reconfigure_successful')
             after = PleosCoordinator(self.hass, current, self.client)
             self.addAsyncCleanup(after.async_shutdown)
             self.assertEqual(after.account_id, before)
             self.assertEqual(after.archive.directory, folder)
-            self.assertEqual(vehicle_id(after.account_id, CAR['vin']), car_id)
+            self.assertEqual(vehicle_id(after.account_id, car['vin']), car_id)
             self.assertEqual(current.unique_id, credential_id('kia', replacement['client_id']))
         self.assertEqual(account_id(self.entry), 'kia')
         self.assertEqual(ConnectionSensor(self.coordinator).unique_id, 'kia_api_status')
