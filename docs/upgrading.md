@@ -4,6 +4,18 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Account checks and actionable repairs in 0.14.0
+
+Setup and key replacement now reject vehicles already associated with another account entry of the same manufacturer. When replacement credentials have no vehicle in common with the entry's existing devices, an unchecked confirmation asks you to verify that they belong to the same account. This supports legitimate renewal after all vehicles change or an account becomes empty, without silently accepting an unverified account change. Pleos does not document a stable personal-account identifier; these checks provide vehicle continuity and explicit confirmation, not proof of account identity.
+
+Existing account namespaces, entity IDs, settings, history and storage formats are unchanged. Existing duplicate entries are not merged or deleted. See [multiple accounts](configuration.md#multiple-accounts) before replacing a key on a duplicated entry.
+
+Authentication and account-refresh errors now use translatable messages. When optional raw archiving cannot write a file, an account-specific warning appears in Repairs with storage troubleshooting steps. It clears after a successful write, when archiving is disabled, or when the account is removed. Ordinary cloud outages and rate limits do not create storage repairs.
+
+New [automation examples](examples.md) show freshness-aware notifications and delayed trip handling. The [quality checklist](quality-scale.md) records evidence, exemptions and unresolved requirements; this release does not claim an official Home Assistant tier.
+
+Restart after updating. No new dependency versions or account migration are required.
+
 ## Managed polling, entity defaults and device removal in 0.13.0
 
 **Custom snapshot and trip polling settings are retired.** The integration now manages snapshots every 15 minutes and completed trips every 60 minutes. Account configuration migrates from version 1.0/1.1 to 1.2 and removes only `poll_minutes` and `trip_poll_minutes`. Manual Refresh, the stale-data threshold, location/geocoding privacy choices, per-car odometer calibration, events and archive options remain available.
