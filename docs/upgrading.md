@@ -4,6 +4,18 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Managed polling, entity defaults and device removal in 0.13.0
+
+**Custom snapshot and trip polling settings are retired.** The integration now manages snapshots every 15 minutes and completed trips every 60 minutes. Account configuration migrates from version 1.0/1.1 to 1.2 and removes only `poll_minutes` and `trip_poll_minutes`. Manual Refresh, the stale-data threshold, location/geocoding privacy choices, per-car odometer calibration, events and archive options remain available.
+
+New entity discovery follows the supported field catalog. Supported names and numbered ranges use translations; undocumented fields no longer create new entities automatically. Existing undocumented entities continue updating. Noisy diagnostic entities default disabled only when first registered. Existing names, IDs, user units, labels and enabled/disabled choices are preserved.
+
+Vehicles confirmed absent by a successful account refresh can be deleted from their device page. Removal is explicit: API failures, malformed responses, active vehicles and the account API device do not authorize deletion. See [vehicle removal](configuration.md#removing-a-vehicle-that-left-the-account).
+
+The integration now passes strict type checks across all modules, with unchanged storage formats. It uses published `pleos-client==0.2.0` and `nominatim-reverse-client==0.1.1`; the latter moves package ownership and metadata to its own repository without changing client code.
+
+Restart after installing. Keep a Home Assistant backup before upgrading. Reinstalling 0.12.0 restores its code and default polling cadence; restoring a pre-upgrade backup is needed to recover discarded custom polling values. Do not delete and recreate the account as a rollback step because account removal clears derived data.
+
 ## Availability, refresh reliability and API clients in 0.12.0
 
 Vehicle entities now become **unavailable** when the account request fails. A failed individual endpoint makes its current readings unavailable while healthy endpoints still update. Successfully fetched current readings with missing/invalid values or reporting times become **unknown**, including ranges and tyre pressures available only from the saved cache. A successfully returned old parked-car snapshot remains available with its original reporting time and stale-data attributes.

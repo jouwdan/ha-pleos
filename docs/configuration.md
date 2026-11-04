@@ -72,4 +72,6 @@ To replace credentials or temporarily stop polling, use reconfiguration or disab
 1. Replace `my_car_` with your car's entity-ID prefix and `hyundai_api_` with `kia_api_` or `genesis_api_` if needed. Check the full IDs against your entity list: older installations and customised IDs may also have different suffixes. Update these in both cards and markdown templates; some templates assemble IDs from a prefix and suffix.
 2. In Home Assistant, add a dashboard, open it, then choose **⋮ → Edit → ⋮ → Raw configuration editor** and paste the file.
 
+On a new installation, enable the endpoint API and data-age diagnostic entities used by the dashboard if you want its diagnostic tables and freshness tiles. Existing enabled entities remain enabled.
+
 Missing tiles, gauges, map and badges are hidden outside edit mode. Trip cards fill in as valid samples arrive; graphs need recorded history. Missing trip distance is shown as unavailable. Summary tables label API units separately from converted sensor states. The VIN is masked to its last six characters.
