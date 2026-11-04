@@ -122,6 +122,9 @@
   },
   "entity": {
     "sensor": {
+      "legacy_reading": {
+        "name": "Legacy reading ({field})"
+      },
       "archive": {
         "name": "Archive",
         "state": {
@@ -663,6 +666,9 @@
       }
     },
     "binary_sensor": {
+      "legacy_reading": {
+        "name": "Legacy reading ({field})"
+      },
       "batteries_charge_charging": {
         "name": "Charging"
       },

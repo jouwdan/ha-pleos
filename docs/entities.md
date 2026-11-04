@@ -23,7 +23,7 @@ Each account entry creates an **API device** (for example *Kia API* or *Kia 2 AP
 
 ## Supported entities and defaults
 
-New entities are limited to the documented snapshot and trip fields listed below, plus numbered range readings when the API returns more than one range of the same kind. Their names use translation keys. Existing entities from undocumented fields retain their IDs and names; new undocumented fields remain available in diagnostics and optional raw archives without creating entities automatically.
+New entities are limited to the documented snapshot and trip fields listed below, plus numbered range readings when the API returns more than one range of the same kind. Their names use translation keys. Existing entities from undocumented fields retain their IDs and user settings, with a translated legacy label when no custom name is set; new undocumented fields remain available in diagnostics and optional raw archives without creating entities automatically.
 
 New **endpoint API**, **last reported**, **data age**, **coordinate system**, trip-unit diagnostics and **Last successful poll** entities are disabled by default. Enable the ones you need in **Settings → Devices & services → Entities**. Connection, Vehicle information and Archive remain enabled. Upgrades preserve existing enabled/disabled choices, names, units and entity IDs.
 
@@ -102,7 +102,11 @@ If one endpoint fails, its current vehicle measurements become unavailable while
 
 A successful response that omits a current reading, contains an invalid value or lacks a valid reporting time makes that current entity unknown. This includes ranges and tyre pressures restored only from storage. Cached data is preserved in diagnostics and storage; it is not used as the current entity state. Successful responses containing an old but valid parked-car report remain available with their original timestamp and age. Automations requiring recent information should check both entity state and `data_stale`.
 
-Entities use names such as **AC charge limit** and **Cabin fan speed**; historical readings include **(last trip)**. Name changes preserve existing IDs and customised names. Documented fields support Home Assistant translations, with English included. New IDs use the English name regardless of your display language. Undocumented fields use names derived from their API paths.
+## Entity names
+
+Entities use names such as **AC charge limit** and **Cabin fan speed**; historical readings include **(last trip)**. Name changes preserve existing IDs and customised names. Entity labels support Home Assistant translations, with English included. New IDs use the English name regardless of your display language.
+
+Existing entities for undocumented fields use **Legacy reading ({field})**, with a stable technical field identifier such as `batteries_charge_newfield`. The label can be translated; the identifier remains unchanged because the API field has no documented meaning to translate. This replaces the previous generated English display name when the field is returned, while preserving custom names, IDs, user units, precision, labels, and enabled/disabled or hidden choices. Registry-only entries for absent fields are left intact and adopt the label when the field returns. This does not make the field officially supported or enable discovery of new undocumented entities.
 
 ## Units
 

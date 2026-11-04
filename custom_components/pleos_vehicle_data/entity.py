@@ -70,8 +70,10 @@ class VehicleEntity(CoordinatorEntity[PleosCoordinator]):
             if translation_key in NUMBERED_RANGE_NAMES:
                 self._attr_translation_placeholders = {"index": key.rsplit("_", 1)[1]}
         else:
-            # Undocumented fields keep the English name generated from their path.
-            self._attr_name = spec["name"]
+            # Only registered legacy readings reach this path. Translate the label,
+            # leaving their stable technical field identifier uninterpreted.
+            self._attr_translation_key = "legacy_reading"
+            self._attr_translation_placeholders = {"field": key}
         vehicle = coordinator.data["cars"][car_id]["vehicle"]
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, car_id)},

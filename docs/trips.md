@@ -14,7 +14,7 @@ Missing final samples (`null`, the text `"null"`, or `"invalid"`) do not produce
 
 Numeric trip sensors have `trip_min`, `trip_max`, `trip_mean`, `valid_samples` and `total_samples` attributes. Summaries use valid samples in the final sample's unit; the mean is per sample, not time-weighted. Home Assistant can convert the sensor state to your preferred unit without converting these attributes. Each endpoint reports its own latest trip, so its readings may refer to a different drive.
 
-**Trip distance (last trip)** is the difference between the first and last valid odometer samples of the latest driving trip. Its `odometer_start` and `odometer_end` attributes are in kilometres. An invalid final sample does not become a reading. Existing **(last trip)** entities for undocumented fields continue updating. New undocumented fields stay in the diagnostic payload and trip summaries without creating new entities. Individual samples have no documented timestamps.
+**Trip distance (last trip)** is the difference between the first and last valid odometer samples of the latest driving trip. Its `odometer_start` and `odometer_end` attributes are in kilometres. An invalid final sample does not become a reading. Existing entities for undocumented trip fields continue updating under the translated [legacy reading label](entities.md#entity-names), preserving their IDs and custom names. New undocumented fields stay in the diagnostic payload and trip summaries without creating new entities. Individual samples have no documented timestamps.
 
 ## Trip event entity
 

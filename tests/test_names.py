@@ -64,11 +64,16 @@ def trip_payload(endpoint):
 
 class TranslationFileTests(unittest.TestCase):
     def test_strings_and_english_translation_carry_exactly_the_entity_names(self):
+        expected = {
+            platform: names | ({"legacy_reading": "Legacy reading ({field})"}
+                               if platform in ("sensor", "binary_sensor") else {})
+            for platform, names in ENTITY_NAMES.items()
+        }
         for path in (COMPONENT / "strings.json", COMPONENT / "translations" / "en.json"):
             entity = json.loads(path.read_text())["entity"]
             with self.subTest(file=path.name):
                 self.assertEqual({platform: {key: value["name"] for key, value in names.items()}
-                                  for platform, names in entity.items()}, ENTITY_NAMES)
+                                  for platform, names in entity.items()}, expected)
         self.assertIn("state", json.loads((COMPONENT / "strings.json").read_text())["entity"]["sensor"]["connection"])
 
     def test_translation_keys_are_valid(self):
@@ -101,6 +106,8 @@ class TranslationFileTests(unittest.TestCase):
             ("sensor", "powertrains_distancetoempties_ev_numbered", None),
             ("sensor", "powertrains_distancetoempties_unknown_2", None),
             ("binary_sensor", "powertrains_distancetoempties_ev_2", None),
+            ("sensor", "legacy_reading", None),
+            ("binary_sensor", "legacy_reading", None),
         ):
             with self.subTest(platform=platform, key=key):
                 self.assertEqual(entity_translation_key(platform, key), expected)
@@ -150,7 +157,7 @@ class EntityNameTests(HomeAssistantTestCase):
         finally:
             await platform.async_reset()
 
-    async def test_entities_use_translation_keys_and_keep_names_for_undocumented_fields(self):
+    async def test_entities_use_translation_keys_and_technical_ids_for_legacy_fields(self):
         payload = {"timestamp": stamp(), "charge": {"stateOfCharge": 50, "charging": False, "newField": 3},
                    "location": {"type": 0, "latitude": 0, "longitude": 0}}
         self.client.vehicles = AsyncMock(return_value=[CAR])
@@ -174,8 +181,9 @@ class EntityNameTests(HomeAssistantTestCase):
         self.assertEqual(binary.translation_key, "batteries_charge_charging")
         undocumented = ReadingSensor(self.coordinator, car_id, "batteries_charge_newfield",
                                      car["readings"]["batteries_charge_newfield"])
-        self.assertIsNone(undocumented.translation_key)
-        self.assertEqual(undocumented.name, "Charge new field")
+        self.assertEqual(undocumented.translation_key, "legacy_reading")
+        self.assertEqual(undocumented.translation_placeholders, {"field": "batteries_charge_newfield"})
+        self.assertFalse(hasattr(undocumented, "_attr_name"))
         tracker = VehicleTracker(self.coordinator, car_id, "location", {"name": "Location", "source": "locations"})
         self.assertEqual(tracker.translation_key, "location")
         self.assertEqual(ConnectionSensor(self.coordinator).translation_key, "connection")
