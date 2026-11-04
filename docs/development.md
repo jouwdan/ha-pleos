@@ -20,7 +20,9 @@ The workflow also checks every integration module against a threshold above 95%,
 
 ### Completed checks
 
-The 0.13.0 candidate passes 291 tests and 610 subtests on Home Assistant 2026.10.1, with 98.79% branch coverage, 100% config-flow coverage and every module above 95%. Strict mypy passes all 21 integration modules; Ruff passes. Regression tests cover polling migration, supported/legacy entities, first-registration defaults, guarded device removal and rediscovery after a removed vehicle returns without a reload.
+The 0.13.0 candidate passes 291 tests and 610 subtests on Home Assistant 2026.10.0 and 2026.10.4 in [hosted CI](https://github.com/jouwdan/ha-pleos/actions/runs/41804463076), and locally on 2026.10.1, with 98.79% branch coverage, 100% config-flow coverage and every module above 95%. Strict mypy passes all 21 integration modules; Ruff, HACS and Hassfest pass. Regression tests cover polling migration, supported/legacy entities, first-registration defaults, guarded device removal and rediscovery after a removed vehicle returns without a reload.
+
+The 2026-11-04 live upgrade from 0.12.0 to 0.13.0 on HA 2026.10.4 passed configuration validation, restart, manual refresh and entry reload. Migration removed only the retired polling fields; account data and all 88 registry identities/preferences stayed unchanged. The trip deduplication store, statistics ledger, 100 recorder statistics rows and cumulative EV totals were preserved, with no repeated trip event. The account remained connected and Pleos/geocoder logs contained no warnings or errors. A local pre-upgrade backup was retained. New-entity defaults and stale-device removal are tested synthetically; the live vehicle was not deleted.
 
 Development checkpoints were tested independently on Home Assistant 2026.10.1. They were combined into the [0.12.0 integration release](https://github.com/jouwdan/ha-pleos/releases/tag/v0.12.0):
 
