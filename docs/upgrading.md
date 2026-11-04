@@ -12,7 +12,7 @@ VIN matching remains a continuity check, not proof of account identity. Replacem
 
 Existing entities for undocumented API fields now use a translatable **Legacy reading ({field})** label, where `{field}` is the technical field identifier. Their default display names change when the field is returned, but entity IDs, custom names, enabled/disabled and hidden settings, units, labels and other user preferences are preserved. Supported entity names remain unchanged, and new undocumented fields still do not create entities.
 
-This is the first 1.x stable release. The integration aims to meet Home Assistant's Gold quality standards; official tier recognition and the remaining account-identity requirements are tracked in the [quality checklist](quality-scale.md). Restart Home Assistant after updating. Dependency versions and storage formats are unchanged.
+This is the first 1.x stable release, with a no-breaking-changes policy for future 1.x updates. Existing IDs, configuration, saved history and documented automation interfaces form the compatibility contract; necessary breaking changes require a future major version with advance notice and migration guidance. The integration aims to meet Home Assistant's Gold quality standards; official tier recognition and the remaining account-identity requirements are tracked in the [quality checklist](quality-scale.md). Restart Home Assistant after updating. Dependency versions and storage formats are unchanged.
 
 ## Account checks and actionable repairs in 0.14.0
 

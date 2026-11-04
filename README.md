@@ -8,7 +8,7 @@ Bring your Hyundai, Kia or Genesis vehicle into Home Assistant using the officia
 
 This is a **read-only cloud integration for Europe**. It reads the data your car has already uploaded; it cannot lock the car, start climate control or charging, or wake it for a fresh update.
 
-The **1.x series is the stable release line**. This integration aims to meet **Home Assistant's Gold quality standards**. It remains a custom integration with no awarded HA tier; the [quality checklist](docs/quality-scale.md) records the evidence and outstanding requirements.
+The **1.x series is the stable release line**, with a no-breaking-changes policy for entity IDs, user configuration and saved history. This integration aims to meet **Home Assistant's Gold quality standards**. It remains a custom integration with no awarded HA tier; the [quality checklist](docs/quality-scale.md) records the evidence and outstanding requirements.
 
 ## What it does
 
