@@ -25,6 +25,8 @@ Each car has a **Trip** event entity (`event.<car>_trip`). It fires once for eve
 - The event's own time is when Home Assistant received the trip, not when it was driven; use `trip_start` for the drive time.
 - Fired trips are remembered across restarts for nine days. After a restart, Home Assistant restores the last event with its original time; that is not a new trip.
 
+For a copyable notification automation that filters driving trips and handles delayed arrival, see [Automation examples](examples.md#notify-when-a-completed-driving-trip-arrives).
+
 ## Trip statistics
 
 Trips reach Home Assistant up to a day after the drive, so sensor states and Trip events carry the time they arrived. For correct daily and hourly figures, the integration also imports **long-term statistics at the hour each trip started**:

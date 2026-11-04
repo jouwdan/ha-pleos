@@ -8,11 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.helpers import entity_registry
+from homeassistant.helpers import entity_registry, issue_registry
 
 from custom_components.pleos_vehicle_data import async_remove_entry
 from custom_components.pleos_vehicle_data.archive import TRIP_HASH_DAYS, write_records
 from custom_components.pleos_vehicle_data.coordinator import PleosCoordinator
+from custom_components.pleos_vehicle_data.const import DOMAIN
 from custom_components.pleos_vehicle_data.data import vehicle_id
 from custom_components.pleos_vehicle_data.sensor import ArchiveSensor, async_setup_entry
 
@@ -117,13 +118,29 @@ class ArchiveTests(HomeAssistantTestCase):
 
     async def test_failed_write_is_reported_and_retried_on_the_next_poll(self):
         self.serve()
+        registry = issue_registry.async_get(self.hass)
+        issue_id = f"archive_write_failed_{self.entry.entry_id}"
         with patch("custom_components.pleos_vehicle_data.archive.write_records", side_effect=PermissionError(13, "Permission denied")):
             await self.coordinator._async_update_data()
+            issue = registry.async_get_issue(DOMAIN, issue_id)
+            self.assertIsNotNone(issue)
+            self.assertEqual(issue.translation_key, "archive_write_failed")
+            self.assertEqual(issue.translation_placeholders, {"directory": str(self.coordinator.archive.directory)})
+            self.assertEqual(issue.severity, issue_registry.IssueSeverity.WARNING)
+            self.assertFalse(issue.is_fixable)
+            self.assertTrue(issue.is_persistent)
+            self.assertEqual(self.coordinator.archive.hashes, {"snapshots": {}, "trips": {}})
+            await self.coordinator._async_update_data()
+            self.assertIs(registry.async_get_issue(DOMAIN, issue_id), issue)
+            self.assertEqual(len(registry.issues), 1)
         status = self.coordinator.archive.status
         self.assertEqual((status["state"], status["last_error"]), ("error", "PermissionError: Permission denied"))
         self.assertEqual(self.records(), [])
         await self.coordinator._async_update_data()
         self.assertEqual(self.coordinator.archive.status["state"], "ok")
+        self.assertIsNone(registry.async_get_issue(DOMAIN, issue_id))
+        self.assertEqual(len([r for r in self.records("snapshot") if r["endpoint"] == "batteries"]), 1)
+        await self.coordinator._async_update_data()
         self.assertEqual(len([r for r in self.records("snapshot") if r["endpoint"] == "batteries"]), 1)
 
     async def test_old_trip_hashes_are_pruned_but_files_kept(self):

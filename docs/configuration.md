@@ -16,9 +16,13 @@ If unsure, leave the selection empty and compare the odometer with your car's da
 
 ## Multiple accounts
 
-Each account has separate devices, readings, options, trip history and archive storage. Additional entries are named **Kia 2**, **Kia 3**, and so on; you can rename them in Home Assistant. Adding the same API key twice is rejected. To replace an existing account's credentials, use **⋮ → Reconfigure** on that entry instead of adding it again. Different keys are treated as separate accounts, even if they grant access to the same car.
+Each account has separate devices, readings, options, trip history and archive storage. Additional entries are named **Kia 2**, **Kia 3**, and so on; you can rename them in Home Assistant. Adding the same API key twice is rejected. A key that includes a vehicle already associated with another entry of the same manufacturer is also rejected, even if that entry is unloaded. To replace an existing account's credentials, use **⋮ → Reconfigure** on that entry instead of adding it again.
 
 Account reconfiguration preserves entity and device IDs, statistics and archive paths. Replacing credentials keeps those identities for both existing and newly added accounts.
+
+If replacement credentials return no vehicles matching the entry's existing devices, Home Assistant asks you to explicitly confirm that they belong to the same Pleos and manufacturer account. Check which account you signed into when issuing the key. Leave the confirmation unchecked and cancel if it is a different account; no credentials change until you confirm. A key overlapping another entry is still rejected, regardless of confirmation. If a vehicle has changed accounts, remove its old device after a successful refresh confirms it has left the old account, then configure its new account.
+
+These checks compare individual known vehicles; they cannot prove account identity. Pleos's documented personal API exposes no stable account identifier, and its vehicle list changes when vehicles leave or keys are reissued. Empty accounts, accounts whose entire vehicle list has changed, and entries whose initial setup failed before devices registered cannot be matched automatically. Existing duplicate entries are not merged or removed. The [quality checklist](quality-scale.md) keeps formal account-identity compliance open pending a supported identity contract or upstream review of this fallback.
 
 ## Options
 

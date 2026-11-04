@@ -63,6 +63,8 @@ Vehicle entities become unavailable when Pleos cannot be reached. A successful r
 | Remove an account or uninstall the integration | [Removal](docs/configuration.md#removing-the-integration) |
 | Understand sensors, units and retained readings | [Entity reference](docs/entities.md) |
 | Use trip events, statistics or raw archives | [Trip guide](docs/trips.md) |
+| Notify on fresh battery reports or completed trips | [Automation examples](docs/examples.md) |
 | Compare this with Kia Uvo / Hyundai Bluelink | [kia_uvo comparison](docs/kia-uvo-comparison.md) |
+| Review Home Assistant standards readiness | [Quality checklist](docs/quality-scale.md) |
 
 For a bug or feature request, [open an issue](https://github.com/jouwdan/ha-pleos/issues). Include your Home Assistant and integration versions, vehicle model, and what happened. If sharing [diagnostics](docs/troubleshooting.md#diagnostics), review them for personal information first. Never post your API credentials.

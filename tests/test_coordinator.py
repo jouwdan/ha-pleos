@@ -1,12 +1,15 @@
 """Coordinator polling, entity discovery and entity state."""
 
+import json
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
-from pleos_client import ApiError
+from pleos_client import ApiError, AuthError
 from custom_components.pleos_vehicle_data.binary_sensor import ReadingBinarySensor
 from custom_components.pleos_vehicle_data.const import DOMAIN
 from custom_components.pleos_vehicle_data.data import vehicle_id
@@ -18,6 +21,26 @@ from support import CAR, HomeAssistantTestCase, stamp
 
 
 class CoordinatorTests(HomeAssistantTestCase):
+    async def test_account_failures_have_translated_messages_without_api_details(self):
+        private = "private-client-secret-or-response-body"
+        for failure, expected, key in (
+            (AuthError(private), ConfigEntryAuthFailed, "personal_key_rejected"),
+            (ApiError(0, private), UpdateFailed, "account_refresh_failed"),
+            (ApiError(429, private), UpdateFailed, "account_refresh_failed"),
+            (ApiError(503, private), UpdateFailed, "account_refresh_failed"),
+        ):
+            with self.subTest(failure=type(failure), status=getattr(failure, "status", None)):
+                self.client.vehicles = AsyncMock(side_effect=failure)
+                with self.assertRaises(expected) as raised:
+                    await self.coordinator._async_update_data()
+                self.assertEqual(raised.exception.translation_domain, DOMAIN)
+                self.assertEqual(raised.exception.translation_key, key)
+                self.assertIsNone(raised.exception.translation_placeholders)
+                self.assertNotIn(private, str(raised.exception))
+                for filename in ("strings.json", "translations/en.json"):
+                    strings = json.loads((Path(__file__).parents[1] / "custom_components" / DOMAIN / filename).read_text())
+                    self.assertTrue(strings["exceptions"][key]["message"])
+
     async def test_stale_missing_and_binary_values(self):
         await self.populate()
         car_id = vehicle_id("kia", CAR["vin"])

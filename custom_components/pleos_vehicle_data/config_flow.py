@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Self
 
 import probatio as vol
 
@@ -18,7 +18,7 @@ from homeassistant.helpers.selector import (
     TextSelector, TextSelectorConfig, TextSelectorType,
 )
 
-from .account import account_id, credential_id
+from .account import account_id, credential_id, has_known_vehicle
 from pleos_client import ApiError, AuthError, PleosClient
 from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN
 from .models import PleosConfigEntry
@@ -35,8 +35,13 @@ KEY_GUIDE_URL = "https://document.pleos.ai/en/api-reference/vehicle-data-api/get
 class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 2
+    _validated_vehicles: frozenset[str] = frozenset()
+    _replacement_entry: PleosConfigEntry
+    _replacement_data: dict[str, str]
+    _previous_credentials: tuple[str, str]
 
     async def validate(self, brand: str, user_input: dict[str, Any]) -> str | None:
+        self._validated_vehicles = frozenset()
         credentials = {key: user_input[key].strip() for key in ("client_id", "client_secret")}
         if not all(credentials.values()):
             return "invalid_auth"
@@ -46,6 +51,8 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "invalid_auth"
         except ApiError as error:
             return "rate_limited" if error.status == 429 else "cannot_connect"
+        # Transient vehicle fingerprints also protect concurrent flows before devices exist.
+        self._validated_vehicles = frozenset(vehicle_id(brand, car["vin"]) for car in self._vehicles)
         return None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -72,6 +79,9 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                     description_placeholders={"pleos_url": PLEOS_URL, "key_guide_url": KEY_GUIDE_URL})
 
     async def async_step_odometer(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        self._abort_if_unique_id_configured()
+        if reason := self.vehicle_conflict(self._setup_data["brand"]):
+            return self.async_abort(reason=reason)
         if user_input is None and self._vehicles:
             vehicles = {
                 vehicle_id(self._setup_data["account_id"], car["vin"]):
@@ -81,7 +91,6 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id="odometer", data_schema=vol.Schema({
                 vol.Required("odometer_km_vehicles", default=[]): odometer_selector(vehicles),
             }))
-        self._abort_if_unique_id_configured()
         titles = {entry.title for entry in self._async_current_entries()}
         brand = self._setup_data["brand"]
         title, number = BRANDS[brand], 1
@@ -105,18 +114,48 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         errors = {}
         if user_input:
+            self._previous_credentials = (entry.data["client_id"], entry.data["client_secret"])
             if self.key_configured(entry.data["brand"], user_input["client_id"], entry.entry_id):
                 return self.async_abort(reason="already_configured")
             await self.async_set_unique_id(credential_id(entry.data["brand"], user_input["client_id"]))
             if error := await self.validate(entry.data["brand"], user_input):
                 errors["base"] = error
             else:
-                return self.async_update_reload_and_abort(
-                    entry, unique_id=credential_id(entry.data["brand"], user_input["client_id"]),
-                    data_updates={key: user_input[key].strip() for key in ("client_id", "client_secret")},
-                )
+                if self.key_configured(entry.data["brand"], user_input["client_id"], entry.entry_id):
+                    return self.async_abort(reason="already_configured")
+                if reason := self.vehicle_conflict(entry.data["brand"], entry.entry_id):
+                    return self.async_abort(reason=reason)
+                self._replacement_entry = entry
+                self._replacement_data = {key: user_input[key].strip() for key in ("client_id", "client_secret")}
+                if has_known_vehicle(self.hass, entry, (car["vin"] for car in self._vehicles)):
+                    return self.finish_replacement()
+                return await self.async_step_confirm_account()
         return self.async_show_form(step_id=step, data_schema=vol.Schema(KEY_FIELDS), errors=errors,
                                     description_placeholders={"brand": BRANDS[entry.data["brand"]], "pleos_url": PLEOS_URL})
+
+    async def async_step_confirm_account(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input and user_input["confirm_same_account"]:
+            return self.finish_replacement()
+        return self.async_show_form(
+            step_id="confirm_account",
+            data_schema=vol.Schema({vol.Required("confirm_same_account", default=False): BooleanSelector()}),
+            errors={"base": "confirmation_required"} if user_input is not None else {},
+            description_placeholders={"brand": BRANDS[self._replacement_entry.data["brand"]],
+                                      "title": self._replacement_entry.title},
+        )
+
+    def finish_replacement(self) -> ConfigFlowResult:
+        entry = self._replacement_entry
+        if (entry.data["client_id"], entry.data["client_secret"]) != self._previous_credentials:
+            return self.async_abort(reason="credentials_changed")
+        if self.key_configured(entry.data["brand"], self._replacement_data["client_id"], entry.entry_id):
+            return self.async_abort(reason="already_configured")
+        if reason := self.vehicle_conflict(entry.data["brand"], entry.entry_id):
+            return self.async_abort(reason=reason)
+        return self.async_update_reload_and_abort(
+            entry, unique_id=credential_id(entry.data["brand"], self._replacement_data["client_id"]),
+            data_updates=self._replacement_data,
+        )
 
     @staticmethod
     @callback
@@ -126,6 +165,18 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def key_configured(self, brand: str, client_id: str, exclude: str | None = None) -> bool:
         return any(entry.entry_id != exclude and entry.data.get("brand") == brand
                    and entry.data.get("client_id") == client_id.strip() for entry in self._async_current_entries())
+
+    def vehicle_conflict(self, brand: str, exclude: str | None = None) -> str | None:
+        if any(entry.entry_id != exclude and entry.data.get("brand") == brand
+               and has_known_vehicle(self.hass, entry, (car["vin"] for car in self._vehicles))
+               for entry in self._async_current_entries()):
+            return "vehicle_already_configured"
+        if self.hass.config_entries.flow.async_has_matching_flow(self):
+            return "already_in_progress"
+        return None
+
+    def is_matching(self, other_flow: Self) -> bool:
+        return bool(self._validated_vehicles & other_flow._validated_vehicles)
 
 
 # Options shown together in the form; entry options stay flat.

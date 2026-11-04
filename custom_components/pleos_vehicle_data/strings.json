@@ -38,6 +38,13 @@
           "client_secret": "Copy the matching Client Secret. Home Assistant saves it in its private configuration."
         }
       },
+      "confirm_account": {
+        "title": "Confirm the account for {title}",
+        "description": "The replacement key returned no vehicles that match this entry's saved devices. This can happen after replacing all your vehicles, with an empty account, or when using a different account. Pleos does not provide an account identifier that Home Assistant can verify.\n\nContinue only if this key belongs to the same Pleos and {brand} manufacturer accounts used for **{title}**. Your existing entry, history and settings will be kept. If these are different accounts, cancel and add a separate entry instead.",
+        "data": {
+          "confirm_same_account": "I confirm this key belongs to the same Pleos and manufacturer accounts"
+        }
+      },
       "reconfigure": {
         "title": "Update your {brand} API key",
         "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
@@ -54,10 +61,14 @@
     "error": {
       "invalid_auth": "The API key was rejected. Generate a new personal key and enter both matching fields for this manufacturer.",
       "cannot_connect": "Could not read your vehicles from Pleos. Check your internet connection and personal API availability, then try again.",
-      "rate_limited": "Pleos is limiting requests. Wait a few minutes before trying again."
+      "rate_limited": "Pleos is limiting requests. Wait a few minutes before trying again.",
+      "confirmation_required": "Confirm that the replacement key belongs to the same accounts, or cancel without changing the existing key."
     },
     "abort": {
-      "already_configured": "This API key is already configured. Use Reconfigure on its existing entry to replace it."
+      "already_configured": "This API key is already configured. Use Reconfigure on its existing entry to replace it.",
+      "credentials_changed": "This entry's API key changed while you were confirming the replacement. Start again to review the current account.",
+      "vehicle_already_configured": "This key grants access to a vehicle already associated with another Pleos account entry. Use Reconfigure on that entry to replace its key. If the vehicle has changed accounts, remove its old device first.",
+      "already_in_progress": "Another Pleos setup or key replacement is already using one of these vehicles. Complete or cancel that flow before trying again."
     }
   },
   "options": {
@@ -800,7 +811,19 @@
       }
     }
   },
+  "issues": {
+    "archive_write_failed": {
+      "title": "Vehicle archive cannot be written",
+      "description": "Home Assistant could not write the raw vehicle-data archive to `{directory}`. Check that there is free disk space and Home Assistant has permission to write to this folder. Existing archive files are kept, and unwritten data is retried when Pleos returns it again.\n\nAfter fixing the storage problem, wait for the next poll or use the Pleos Vehicle Data: Refresh action. This issue clears after a successful write. If you no longer need the archive, turn off Archive raw vehicle data under the account's Configure → Storage options."
+    }
+  },
   "exceptions": {
+    "personal_key_rejected": {
+      "message": "Pleos rejected the personal API key. Generate a new key and replace both the Client ID and Client Secret in the reauthentication request."
+    },
+    "account_refresh_failed": {
+      "message": "The Pleos account could not be refreshed. Check your connection and try again later."
+    },
     "entry_not_found": {
       "message": "Config entry {entry_id} was not found."
     },

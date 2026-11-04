@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
-from homeassistant.core import HomeAssistant
-
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, TRIP_ENDPOINTS
@@ -61,6 +61,12 @@ def archive_store(hass: HomeAssistant, entry_id: str) -> Store[ArchiveHashes]:
     return Store(hass, 1, f"{DOMAIN}.{entry_id}.archive")
 
 
+@callback
+def async_clear_archive_issue(hass: HomeAssistant, entry_id: str) -> None:
+    """Clear only this account's archive issue after recovery or explicit cleanup."""
+    ir.async_delete_issue(hass, DOMAIN, f"archive_write_failed_{entry_id}")
+
+
 def content_hash(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -82,6 +88,7 @@ def write_records(directory: Path, records: list[ArchiveRecord]) -> None:
 class ResponseArchive:
     def __init__(self, hass: HomeAssistant, entry_id: str, account: str) -> None:
         self.hass = hass
+        self.entry_id = entry_id
         self.directory = Path(hass.config.path(DOMAIN, "archive", account))
         self.store = archive_store(hass, entry_id)
         # {"snapshots": {"<car>/<endpoint>": hash}, "trips": {"<car>/<endpoint>": {start: hash}}, "vehicles": hash}
@@ -164,8 +171,16 @@ class ResponseArchive:
                 # Unwritten records are found again on the next poll, because their hashes were not stored.
                 self.status.update({"state": "error", "last_error": f"{type(error).__name__}: {error.strerror or error}"})
                 LOGGER.warning("Could not write the Pleos response archive in %s: %s", self.directory, error)
+                ir.async_create_issue(
+                    self.hass, DOMAIN, f"archive_write_failed_{self.entry_id}",
+                    is_fixable=False, is_persistent=True, severity=ir.IssueSeverity.WARNING,
+                    translation_key="archive_write_failed",
+                    translation_placeholders={"directory": str(self.directory)},
+                    learn_more_url="https://github.com/jouwdan/ha-pleos/blob/main/docs/troubleshooting.md#archive-storage-problems",
+                )
                 self.staged = []
                 return
+            async_clear_archive_issue(self.hass, self.entry_id)
             self.status.update({"state": "ok", "last_error": None,
                                 "records_written": self.status["records_written"] + len(records),
                                 "last_written_at": records[-1]["fetched_at"]})
