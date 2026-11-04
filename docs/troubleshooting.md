@@ -29,6 +29,14 @@ Pleos invalidates old access tokens when a key expires, is revoked or is reissue
 
 Use **Settings → Devices & services → Pleos Vehicle Data → ⋮ → Download diagnostics** for troubleshooting. It includes options, polling and rate-limit status, trip windows, archive status, readings and raw responses. A download from a car's device page contains only that car. Credentials, VINs, nicknames and coordinates are removed. Review the file before attaching it to an issue, especially if the API adds new fields.
 
+## Archive storage problems
+
+If raw archiving is enabled and a file cannot be written, **Settings → System → Repairs** shows **Vehicle archive cannot be written**, including the affected account's archive folder. Check free disk space and that Home Assistant has permission to write to that folder. The Archive diagnostic sensor also shows the last storage error. Vehicle entities continue updating while the archive has a problem.
+
+After fixing storage, wait for the next poll or run **Pleos Vehicle Data: Refresh**. Records that failed to write are not marked as archived, so they are retried if Pleos returns them again. Data that changes before another successful fetch may no longer be available; the integration cannot reconstruct those missing reports. Existing archive files are kept.
+
+The repair clears after a successful write. It also clears when you turn off **Archive raw vehicle data** under **Configure → Storage**, or remove the account. Reloading an account with archiving still enabled keeps the unresolved repair. Temporary Pleos connection failures and rate limits do not create storage repairs; rejected credentials use Home Assistant's reauthentication request instead.
+
 ## Limitations and privacy
 
 - Snapshot polling is managed by the integration at **15 minutes**. After **60 minutes**, successfully fetched snapshot readings are marked `data_stale: true` but remain available. The freshness threshold remains configurable; see [Options](configuration.md#options). Age is updated at each poll. Failed account requests make vehicle entities unavailable; an isolated failed endpoint affects its current readings. Missing or invalid current readings in a successful response are unknown. Automations that require recent information should check entity state and `data_stale`.

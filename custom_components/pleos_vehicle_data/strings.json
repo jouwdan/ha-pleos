@@ -800,6 +800,12 @@
       }
     }
   },
+  "issues": {
+    "archive_write_failed": {
+      "title": "Vehicle archive cannot be written",
+      "description": "Home Assistant could not write the raw vehicle-data archive to `{directory}`. Check that there is free disk space and Home Assistant has permission to write to this folder. Existing archive files are kept, and unwritten data is retried when Pleos returns it again.\n\nAfter fixing the storage problem, wait for the next poll or use the Pleos Vehicle Data: Refresh action. This issue clears after a successful write. If you no longer need the archive, turn off Archive raw vehicle data under the account's Configure → Storage options."
+    }
+  },
   "exceptions": {
     "personal_key_rejected": {
       "message": "Pleos rejected the personal API key. Generate a new key and replace both the Client ID and Client Secret in the reauthentication request."

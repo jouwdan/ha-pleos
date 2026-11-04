@@ -10,7 +10,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from pleos_client import PleosClient
 from .account import account_id
-from .archive import archive_store
+from .archive import archive_store, async_clear_archive_issue
 from .const import DOMAIN
 from .coordinator import PleosCoordinator
 from .economy import economy_store
@@ -43,6 +43,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> b
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> bool:
+    if not entry.options.get("archive", False):
+        async_clear_archive_issue(hass, entry.entry_id)
     coordinator = PleosCoordinator(hass, entry, PleosClient(
         async_get_clientsession(hass), entry.data["brand"], entry.data["client_id"], entry.data["client_secret"],
     ))
@@ -76,6 +78,7 @@ async def async_remove_config_entry_device(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> None:
+    async_clear_archive_issue(hass, entry.entry_id)
     # Forget derived readings, cached ranges and trip tracking. The archive files themselves are kept.
     await trip_store(hass, entry.entry_id).async_remove()
     await window_store(hass, entry.entry_id).async_remove()
