@@ -31,6 +31,7 @@ KEY_GUIDE_URL = "https://document.pleos.ai/en/api-reference/vehicle-data-api/get
 
 class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def validate(self, brand, user_input):
         credentials = {key: user_input[key].strip() for key in ("client_id", "client_secret")}
@@ -123,8 +124,8 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 # Options shown together in the form; entry options stay flat.
-OPTION_SECTIONS = {"polling": ("poll_minutes", "stale_minutes", "location", "reverse_geocode", "geocoder_url", "geocoder_key", "odometer_km_vehicles"),
-                   "trips": ("trip_poll_minutes", "trip_events"),
+OPTION_SECTIONS = {"polling": ("stale_minutes", "location", "reverse_geocode", "geocoder_url", "geocoder_key", "odometer_km_vehicles"),
+                   "trips": ("trip_events",),
                    "storage": ("archive",)}
 
 
@@ -153,10 +154,10 @@ class PleosOptionsFlow(config_entries.OptionsFlowWithReload):
                 if domain == DOMAIN and car_id != account_id(self.config_entry) + "_api":
                     name = device.name_by_user or device.name or car_id
                     vehicles[car_id] = f"{name} ({car_id[-6:]})"
-        selectors = {"poll_minutes": minutes(1440), "stale_minutes": minutes(10080), "location": BooleanSelector(), "reverse_geocode": BooleanSelector(),
+        selectors = {"stale_minutes": minutes(10080), "location": BooleanSelector(), "reverse_geocode": BooleanSelector(),
                      "geocoder_url": TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
                      "geocoder_key": TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                     "trip_poll_minutes": minutes(1440), "trip_events": BooleanSelector(),
+                     "trip_events": BooleanSelector(),
                      "archive": BooleanSelector(),
                      "odometer_km_vehicles": odometer_selector(vehicles)}
         return self.async_show_form(step_id="init", data_schema=vol.Schema({

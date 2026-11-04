@@ -13,7 +13,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .account import account_id
 from pleos_client import ApiError, AuthError, PleosClient
 from .archive import ResponseArchive
-from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS, TRIP_ENDPOINTS
+from .const import (BRANDS, DEFAULT_OPTIONS, DOMAIN, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS,
+                    SNAPSHOT_POLL_MINUTES, TRIP_ENDPOINTS, TRIP_POLL_MINUTES)
 from .data import (Rejections, finite_number, identifier, location, new_trips, readings, reported_age, trip_readings,
                    trip_summary, vehicle_id)
 from .economy import EVEconomy
@@ -43,8 +44,8 @@ class PleosCoordinator(DataUpdateCoordinator):
         self.account_name = entry.title
         self.options = DEFAULT_OPTIONS | dict(entry.options)
         super().__init__(hass, LOGGER, config_entry=entry, name=BRANDS[self.brand],
-                         update_interval=timedelta(minutes=self.options["poll_minutes"]))
-        self.trips = TripTracker(hass, entry.entry_id, self.options["trip_poll_minutes"])
+                         update_interval=timedelta(minutes=SNAPSHOT_POLL_MINUTES))
+        self.trips = TripTracker(hass, entry.entry_id, TRIP_POLL_MINUTES)
         self.archive = ResponseArchive(hass, entry.entry_id, self.account_id) if self.options["archive"] else None
         # Trips waiting to be fired on each car's Trip event entity: {car_id: [(event_type, attributes)]}.
         self.trip_queue = {}

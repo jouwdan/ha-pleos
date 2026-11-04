@@ -28,6 +28,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> bool:
+    """Retire custom polling intervals without changing unrelated preferences."""
+    if entry.version != 1 or entry.minor_version > 2:
+        return False
+    if entry.minor_version < 2:
+        options = {key: value for key, value in entry.options.items()
+                   if key not in ("poll_minutes", "trip_poll_minutes")}
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PleosConfigEntry) -> bool:
     coordinator = PleosCoordinator(hass, entry, PleosClient(
         async_get_clientsession(hass), entry.data["brand"], entry.data["client_id"], entry.data["client_secret"],

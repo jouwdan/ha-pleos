@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect your vehicles",
-        "description": "Get a **personal** API key from [Pleos Playground]({pleos_url}) → account menu → **My Vehicle Data API** → select manufacturer → **Get API Key** → sign into your manufacturer account. [Step-by-step guide]({key_guide_url}).\n\nSelect the same manufacturer below and paste both credentials. Keys must be replaced manually when they expire; check the expiry shown in Pleos. Only data shared by your vehicle will appear.",
+        "description": "Get a **personal** API key from [Pleos Playground]({pleos_url}) \u2192 account menu \u2192 **My Vehicle Data API** \u2192 select manufacturer \u2192 **Get API Key** \u2192 sign into your manufacturer account. [Step-by-step guide]({key_guide_url}).\n\nSelect the same manufacturer below and paste both credentials. Keys must be replaced manually when they expire; check the expiry shown in Pleos. Only data shared by your vehicle will appear.",
         "data": {
           "brand": "Manufacturer",
           "client_id": "Client ID",
@@ -18,7 +18,7 @@
       },
       "odometer": {
         "title": "Odometer",
-        "description": "Home Assistant uses your preferred distance unit (km or miles). Some cars report an odometer value in kilometres but incorrectly label it as miles, making the displayed distance about 1.61 times too high.\n\nSelect only cars with this confirmed problem. If unsure, leave the selection empty and compare the odometer with your dashboard after setup. You can change this later under **Configure → Vehicle status**.",
+        "description": "Home Assistant uses your preferred distance unit (km or miles). Some cars report an odometer value in kilometres but incorrectly label it as miles, making the displayed distance about 1.61 times too high.\n\nSelect only cars with this confirmed problem. If unsure, leave the selection empty and compare the odometer with your dashboard after setup. You can change this later under **Configure \u2192 Vehicle status**.",
         "data": {
           "odometer_km_vehicles": "Correct odometer kilometres labelled as miles"
         },
@@ -28,7 +28,7 @@
       },
       "reauth_confirm": {
         "title": "Replace your {brand} API key",
-        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
+        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) \u2192 My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"
@@ -40,7 +40,7 @@
       },
       "reconfigure": {
         "title": "Update your {brand} API key",
-        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
+        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) \u2192 My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"
@@ -67,10 +67,9 @@
         "description": "Options reload this integration automatically.",
         "sections": {
           "polling": {
-            "name": "Vehicle status",
-            "description": "More frequent polling does not make the car upload sooner. Valid last-reported values stay visible while the car is parked.",
+            "name": "Freshness and privacy",
+            "description": "Vehicle snapshots are requested every 15 minutes. More frequent requests do not make the car upload sooner. Valid last-reported values stay visible while the car is parked.",
             "data": {
-              "poll_minutes": "Polling interval",
               "stale_minutes": "Stale-data threshold",
               "location": "Enable location data and GPS tracking",
               "odometer_km_vehicles": "Correct odometer kilometres labelled as miles",
@@ -79,7 +78,6 @@
               "geocoder_key": "Reverse geocoding API key / token"
             },
             "data_description": {
-              "poll_minutes": "How often status data is requested from Pleos. Trip data has its own interval under Trips.",
               "stale_minutes": "Older readings are marked with data_stale; they do not become unavailable.",
               "location": "Queries the location endpoint and exposes its data. A map tracker is created only for valid WGS84 coordinates.",
               "odometer_km_vehicles": "Select only cars whose API odometer value is in kilometres but labelled miles. Home Assistant will then convert it to your preferred display unit. Leave empty for correctly reported units. This affects new readings only; existing history and statistics are not repaired. Clear the selection if Pleos fixes the underlying data.",
@@ -91,13 +89,12 @@
           "trips": {
             "name": "Trips",
             "data": {
-              "trip_poll_minutes": "Trip data interval",
               "trip_events": "Fire an event for each new trip"
             },
             "data_description": {
-              "trip_poll_minutes": "How often the four trip endpoints are queried. Pleos delivers trip data with a delay, so this can be longer than the polling interval. Trip readings are kept between queries.",
               "trip_events": "Off by default. Fires pleos_vehicle_data_trip once per trip with every sample the API returned. Large trips can be excluded from the recorder. The Trip event entity records every trip regardless of this option."
-            }
+            },
+            "description": "Trip data is requested every 60 minutes because Pleos publishes completed trips with a delay. Trip readings are kept between queries."
           },
           "storage": {
             "name": "Storage",

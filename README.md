@@ -16,7 +16,7 @@ This is a **read-only cloud integration for Europe**. It reads the data your car
 - Estimates cumulative [EV consumption since install](docs/entities.md#estimated-ev-consumption) in kWh/100 km or mi/kWh from valid battery and odometer reports.
 - Shows when data was reported, so you can tell how recent it is.
 
-Available data varies by vehicle. Status is checked every **15 minutes** and trips every **60 minutes** by default; the car uploads on its own schedule, so these are not live readings.
+Available data varies by vehicle. Status is checked every **15 minutes** and trips every **60 minutes**; the car uploads on its own schedule, so these are not live readings.
 
 ## Before you start
 
@@ -46,7 +46,7 @@ Keep your Client Secret private. Personal keys need manual renewal when they exp
 
 ## After setup
 
-The defaults work without further configuration. To change polling, disable location, or enable raw-data archiving, open **Configure** on the account entry. See [all options](docs/configuration.md#options).
+The defaults work without further configuration. To adjust freshness, disable location, or enable raw-data archiving, open **Configure** on the account entry. See [all options](docs/configuration.md#options).
 
 For a ready-made dashboard with charging, range, doors, a map and trip graphs, follow the [example dashboard instructions](docs/configuration.md#example-dashboard).
 

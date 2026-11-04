@@ -165,38 +165,40 @@ class ConfigFlowTests(HomeAssistantTestCase):
         flow.hass = self.hass
         flow.handler = self.entry.entry_id
         form = await flow.async_step_init()
-        submitted = form["data_schema"]({"polling": {"poll_minutes": 20, "stale_minutes": 60, "location": False, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": ""},
+        submitted = form["data_schema"]({"polling": {"stale_minutes": 60, "location": False, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": ""},
                                          "trips": {}, "storage": {}})
-        self.assertEqual(submitted["polling"]["poll_minutes"], 20)
+        self.assertEqual(submitted["polling"]["stale_minutes"], 60)
         # Unchanged fields keep their defaults inside each section.
-        self.assertEqual(submitted["trips"], {"trip_poll_minutes": 60, "trip_events": True})
-        for invalid in ({"poll_minutes": 1}, {"stale_minutes": 10081}):
+        self.assertEqual(submitted["trips"], {"trip_events": True})
+        for invalid in ({"stale_minutes": 1}, {"stale_minutes": 10081}, {"poll_minutes": 15}):
             with self.subTest(invalid=invalid), self.assertRaises(Exception):
-                form["data_schema"]({"polling": {"poll_minutes": 15, "stale_minutes": 60, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": ""} | invalid,
+                form["data_schema"]({"polling": {"stale_minutes": 60, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": ""} | invalid,
                                      "trips": {}, "storage": {}})
+        with self.assertRaises(Exception):
+            form["data_schema"]({"polling": {}, "trips": {"trip_poll_minutes": 5}, "storage": {}})
         self.assertTrue(flow.automatic_reload)
-        # The frontend receives two expanded sections with their fields.
+        # The frontend receives expanded sections with freshness and privacy controls.
         fields = probatio.to_field_list(form["data_schema"], custom_serializer=cv.custom_serializer)
         self.assertEqual([(field["name"], field["type"], field["expanded"]) for field in fields],
                          [("polling", "expandable", True), ("trips", "expandable", True), ("storage", "expandable", True)])
         self.assertEqual([item["name"] for item in fields[0]["schema"]],
-                         ["poll_minutes", "stale_minutes", "location", "reverse_geocode", "geocoder_url", "geocoder_key", "odometer_km_vehicles"])
+                         ["stale_minutes", "location", "reverse_geocode", "geocoder_url", "geocoder_key", "odometer_km_vehicles"])
 
         # Saved options stay flat, so the coordinator and existing entries read them unchanged.
         result = await flow.async_step_init(submitted)
-        self.assertEqual(result["data"], {"poll_minutes": 20, "stale_minutes": 60, "location": False, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "",
-                                          "trip_poll_minutes": 60, "trip_events": True, "archive": True,
+        self.assertEqual(result["data"], {"stale_minutes": 60, "location": False, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "",
+                                          "trip_events": True, "archive": True,
                                           "odometer_km_vehicles": []})
 
     async def test_options_form_shows_saved_values(self):
-        self.hass.config_entries.async_update_entry(self.entry, options={"poll_minutes": 30, "trip_events": False})
+        self.hass.config_entries.async_update_entry(self.entry, options={"poll_minutes": 30, "trip_poll_minutes": 5, "stale_minutes": 90, "trip_events": False})
         flow = PleosOptionsFlow()
         flow.hass = self.hass
         flow.handler = self.entry.entry_id
         defaults = (await flow.async_step_init())["data_schema"]({"polling": {}, "trips": {}, "storage": {}})
-        self.assertEqual(defaults, {"polling": {"poll_minutes": 30, "stale_minutes": 60, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "",
+        self.assertEqual(defaults, {"polling": {"stale_minutes": 90, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "",
                                                "odometer_km_vehicles": []},
-                                    "trips": {"trip_poll_minutes": 60, "trip_events": False},
+                                    "trips": {"trip_events": False},
                                     "storage": {"archive": False}})
 
     async def test_odometer_correction_selects_account_cars_and_preserves_missing_car(self):

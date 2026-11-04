@@ -11,8 +11,11 @@ ENDPOINT_NAMES = {
     "powertrains/data": "Powertrain trips", "speed": "Speed trips",
     "driving/data": "Driving trips", "status/data": "Vehicle status trips",
 }
-DEFAULT_OPTIONS = {"poll_minutes": 15, "stale_minutes": 60, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "", "trip_events": False,
-                   "trip_poll_minutes": 60, "archive": False, "odometer_km_vehicles": []}
+# Vehicle uploads are not live; delayed trip datasets need fewer requests than snapshots.
+SNAPSHOT_POLL_MINUTES = 15
+TRIP_POLL_MINUTES = 60
+DEFAULT_OPTIONS = {"stale_minutes": 60, "location": True, "reverse_geocode": False, "geocoder_url": "", "geocoder_key": "", "trip_events": False,
+                   "archive": False, "odometer_km_vehicles": []}
 TRIP_EVENT = DOMAIN + "_trip"
 # Trip queries normally cover yesterday and today (UTC); after downtime they reach back to the
 # last day fetched, at most this many days including today.

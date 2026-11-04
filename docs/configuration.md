@@ -12,7 +12,7 @@
 
 After validating your API key, setup shows an **Odometer** step for the cars on that account. **Correct odometer kilometres labelled as miles** is off by default. Select only cars whose API odometer value is in kilometres but labelled miles: this makes the displayed distance about 1.61 times too high. Correctly reported kilometres and miles need no correction. Home Assistant's unit preference controls how the distance is displayed.
 
-If unsure, leave the selection empty and compare the odometer with your car's dashboard after setup. You can change the same per-car setting later under **Configure → Vehicle status**. It affects new readings only; existing history and statistics are not repaired. Clear it if Pleos fixes the underlying unit label. Accounts with no vehicles skip this step.
+If unsure, leave the selection empty and compare the odometer with your car's dashboard after setup. You can change the same per-car setting later under **Configure → Freshness and privacy**. It affects new readings only; existing history and statistics are not repaired. Clear it if Pleos fixes the underlying unit label. Accounts with no vehicles skip this step.
 
 ## Multiple accounts
 
@@ -22,24 +22,26 @@ Account reconfiguration preserves entity and device IDs, statistics and archive 
 
 ## Options
 
-All settings are in one place: **Settings → Devices & services → Pleos Vehicle Data → Configure** on an account entry. The dialog has three sections, **Vehicle status**, **Trips** and **Storage**. Changes reload the integration. Everything not listed here works without configuration, including the **Trip** event entity and the trip statistics.
+All settings are in one place: **Settings → Devices & services → Pleos Vehicle Data → Configure** on an account entry. The dialog has three sections, **Freshness and privacy**, **Trips** and **Storage**. Changes reload the integration. Everything not listed here works without configuration, including the **Trip** event entity and the trip statistics.
 
 | Section | Option | Default | Range | Effect |
 | --- | --- | --- | --- | --- |
-| Vehicle status | **Polling interval** | 15 min | 5–1440 min | How often status data is requested. The car uploads on its own schedule, so polling more often does not make data newer. |
-| Vehicle status | **Stale-data threshold** | 60 min | 5–10080 min | Readings older than this get `data_stale: true`. They stay available. |
-| Vehicle status | **Enable location data and GPS tracking** | On | | Requests the location endpoint and creates the GPS tracker. Off: neither. |
-| Vehicle status | **Reverse geocode vehicle location** | Off | | Resolves valid GPS coordinates to a human-readable **Address** sensor. Requires location data and a configured Nominatim-compatible service. |
-| Vehicle status | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. Put credentials in the separate key field; URLs with login details, query parameters or fragments are rejected. Redirects are not followed. No coordinates are sent when empty. |
-| Vehicle status | **Reverse geocoding API key / token** | Empty | | Optional provider credential. For compatible Nominatim-style services it is sent as the `key` parameter. It is sent only to the configured service and redacted from diagnostics. |
-| Vehicle status | **Correct odometer kilometres labelled as miles** | No cars selected | Per car | Treats a selected car's snapshot odometer value as kilometres when the API labels it miles. Use only for a confirmed unit-label error; see [Units](entities.md#units). |
-| Trips | **Trip data interval** | 60 min | 5–1440 min | How often the four trip endpoints are requested. Failed trip requests retry at the next status poll. |
+| Freshness and privacy | **Stale-data threshold** | 60 min | 5–10080 min | Readings older than this get `data_stale: true`. They stay available. |
+| Freshness and privacy | **Enable location data and GPS tracking** | On | | Requests the location endpoint and creates the GPS tracker. Off: neither. |
+| Freshness and privacy | **Reverse geocode vehicle location** | Off | | Resolves valid GPS coordinates to a human-readable **Address** sensor. Requires location data and a configured Nominatim-compatible service. |
+| Freshness and privacy | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. Put credentials in the separate key field; URLs with login details, query parameters or fragments are rejected. Redirects are not followed. No coordinates are sent when empty. |
+| Freshness and privacy | **Reverse geocoding API key / token** | Empty | | Optional provider credential. For compatible Nominatim-style services it is sent as the `key` parameter. It is sent only to the configured service and redacted from diagnostics. |
+| Freshness and privacy | **Correct odometer kilometres labelled as miles** | No cars selected | Per car | Treats a selected car's snapshot odometer value as kilometres when the API labels it miles. Use only for a confirmed unit-label error; see [Units](entities.md#units). |
 | Trips | **Fire an event for each new trip** | Off | | Fires `pleos_vehicle_data_trip` with every sample; see [Trip events](trips.md#trip-events). The **Trip** event entity works regardless of this option. |
 | Storage | **Archive raw vehicle data** | Off | | Keeps raw responses in compressed files; see [Response archive](trips.md#response-archive). |
 
 Reverse-geocoding providers have their own usage, caching and attribution terms. The integration keeps at most 256 successful results in memory, expires them after 48 hours and removes expired entries on the next geocoding poll. The Address sensor exposes provider attribution when the API returns it. Check the terms of the service you configure.
 
 Pleos account credentials are not options: replace them with **⋮ → Reconfigure**; see [Expired or replaced API keys](troubleshooting.md#expired-or-replaced-api-keys).
+
+## Polling cadence
+
+The integration requests vehicle snapshots every 15 minutes and completed-trip data every 60 minutes. Vehicles upload on their own schedule and trip data can arrive hours after a drive; these intervals balance useful updates with cloud request volume. Failed trip requests retry at the next snapshot poll. Existing custom interval settings are removed automatically on upgrade; freshness, location, geocoding, calibration, events and archive choices are preserved.
 
 ## Refresh on demand
 

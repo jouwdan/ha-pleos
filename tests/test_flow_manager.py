@@ -105,6 +105,8 @@ async def test_credential_replacement_recovers_without_changing_identity(
     hass.config_entries.async_update_entry(pleos_entry, options=options)
     assert await hass.config_entries.async_setup(pleos_entry.entry_id)
     await hass.async_block_till_done()
+    # Initial setup retires only the old polling options; credential replacement keeps the rest.
+    options.pop("poll_minutes")
     registry = er.async_get(hass)
     before = {entity.unique_id: entity.entity_id for entity in er.async_entries_for_config_entry(registry, pleos_entry.entry_id)}
     original_data = dict(pleos_entry.data)
