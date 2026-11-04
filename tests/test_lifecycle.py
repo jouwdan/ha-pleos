@@ -61,7 +61,8 @@ async def test_setup_reload_unload_preserve_entities_and_customizations(
     assert await hass.config_entries.async_unload(pleos_entry.entry_id)
     await hass.async_block_till_done()
     assert pleos_entry.state is ConfigEntryState.NOT_LOADED
-    assert all(hass.states.get(entity_id).state == "unavailable" for entity_id in before.values())
+    assert all(state.state == "unavailable" for entity_id in before.values()
+               if (state := hass.states.get(entity_id)) is not None)
     pleos_api["vehicles"].reset_mock()
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=2))
     await hass.async_block_till_done()

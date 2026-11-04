@@ -1,5 +1,7 @@
 """Services for Pleos Vehicle Data."""
 
+from typing import cast
+
 import probatio
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_CONFIG_ENTRY_ID
@@ -7,6 +9,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN, SERVICE_REFRESH
+from .models import PleosConfigEntry
 
 SERVICE_REFRESH_SCHEMA = probatio.Schema({probatio.Required(ATTR_CONFIG_ENTRY_ID): str})
 
@@ -26,7 +29,7 @@ async def _async_refresh(call: ServiceCall) -> None:
             translation_key="entry_not_loaded",
             translation_placeholders={"title": entry.title},
         )
-    await entry.runtime_data.async_refresh_for_service()
+    await cast(PleosConfigEntry, entry).runtime_data.async_refresh_for_service()
 
 
 @callback

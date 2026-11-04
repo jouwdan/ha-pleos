@@ -70,6 +70,9 @@ class PollTimeTests(HomeAssistantTestCase):
         await self.populate()
         self.entry.runtime_data = self.coordinator
         await entity_registry.async_load(self.hass, load_empty=True)
+        entity_registry.async_get(self.hass).async_get_or_create(
+            "sensor", DOMAIN, "kia_last_successful_poll", config_entry=self.entry,
+        )
         platform = EntityPlatform(hass=self.hass, logger=logging.getLogger(__name__), domain='sensor',
                                   platform_name=DOMAIN, platform=None, scan_interval=timedelta(minutes=15), entity_namespace=None)
         platform.config_entry = self.entry

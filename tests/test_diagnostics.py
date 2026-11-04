@@ -69,6 +69,12 @@ class DiagnosticsTests(HomeAssistantTestCase):
         json.dumps(diagnostics)
         self.assertEqual(diagnostics["cars"], {})
 
+    async def test_diagnostics_without_scheduled_polling(self):
+        self.entry.runtime_data = self.coordinator
+        self.coordinator.update_interval = None
+        diagnostics = await async_get_config_entry_diagnostics(self.hass, self.entry)
+        self.assertIsNone(diagnostics["coordinator"]["update_interval_minutes"])
+
     async def test_diagnostics_redact_secrets_embedded_in_text_and_keys(self):
         await self.populate_everything()
         self.client.token = "fixture-bearer-token"

@@ -4,11 +4,16 @@ import hashlib
 import logging
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, TypeGuard, cast
 
 from .const import ENDPOINT_NAMES
+from .models import LocationPoint, Reading, Trip
+
+type FieldPath = tuple[str, ...]
+type PathMatcher = Callable[[FieldPath], bool]
 
 LOGGER = logging.getLogger(__name__)
 # Rejections kept per endpoint as examples on its diagnostic sensor.
@@ -117,15 +122,17 @@ TRIP_NAMES = {
 }
 
 
-def identifier(text):
+def identifier(text: object) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
 
 
-def label(path):
+def label(path: Iterable[object]) -> str:
     return " ".join(re.sub(r"([a-z])([A-Z])", r"\1 \2", str(part)).replace("_", " ") for part in path).capitalize()
 
 
-def reported_age(timestamp):
+def reported_age(timestamp: object) -> float | None:
+    if not isinstance(timestamp, str):
+        return None
     try:
         stamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         if stamp.tzinfo is None:
@@ -136,14 +143,14 @@ def reported_age(timestamp):
         return None
 
 
-def finite_number(value):
+def finite_number(value: object) -> TypeGuard[int | float]:
     try:
         return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
     except OverflowError:
         return False
 
 
-def scale_pressure(value, unit):
+def scale_pressure(value: float, unit: str | None) -> float:
     """Pleos reports kPa in steps of 5 and bar in tenths; psi is reported as is."""
     return value * 5 if unit == "kpa" else value / 10 if unit == "bar" else value
 
@@ -154,17 +161,17 @@ class Spec:
 
     low: float
     high: float
-    units: tuple | None = None  # Accepted raw units (including absent units); None accepts any.
+    units: tuple[str | None, ...] | None = None  # Accepted raw units (including absent units); None accepts any.
     unit: str | None = None  # Fixed Home Assistant unit, replacing the raw one.
     device_class: str | None = None
     state_class: str | None = "measurement"
     integer: bool = False
     numeric_text: bool = False  # Also accept numbers sent as strings; the value becomes a float.
-    convert: Callable | None = None  # convert(value, raw_unit) after validation.
-    options: tuple | None = None  # Enum: the value is an index into these options.
+    convert: Callable[[float, str | None], float] | None = None  # convert(value, raw_unit) after validation.
+    options: tuple[str, ...] | None = None  # Enum: the value is an index into these options.
     unit_field: str | None = None  # Trips: the sample array holding each sample's raw unit.
 
-    def check(self, value, raw_unit):
+    def check(self, value: object, raw_unit: str | None) -> float | str | None:
         """Return the validated, converted value, or None when it must be dropped."""
         if isinstance(value, bool):
             return None
@@ -181,37 +188,39 @@ class Spec:
             return None
         if self.convert:
             value = self.convert(value, raw_unit)
-        return self.options[value] if self.options else value
+        return self.options[cast(int, value)] if self.options else value
 
-    def describe(self):
+    def describe(self) -> str:
         """The rule a rejected value broke, for logs and diagnostics."""
         text = f"expected {self.low} to {self.high}"
         if self.units is not None:
             text += " in " + "/".join(unit if unit is not None else "unspecified" for unit in self.units)
         return text + (" as a whole number" if self.integer else "")
 
-    def metadata(self):
+    def metadata(self) -> Reading:
         if self.options:
             return {"device_class": "enum", "options": list(self.options)}
-        return {key: value for key, value in (("unit_of_measurement", self.unit), ("device_class", self.device_class),
-                                              ("state_class", self.state_class)) if value}
+        return cast(Reading, {
+            key: value for key, value in (("unit_of_measurement", self.unit), ("device_class", self.device_class),
+                                         ("state_class", self.state_class)) if value
+        })
 
 
-def exact(*paths):
+def exact(*paths: FieldPath) -> PathMatcher:
     return lambda path: path in paths
 
 
-def prefix(*parts):
+def prefix(*parts: str) -> PathMatcher:
     return lambda path: path[:len(parts)] == parts
 
 
-def last(*names):
+def last(*names: str) -> PathMatcher:
     return lambda path: path[-1] in names
 
 
 PERCENT = Spec(0, 100, unit="%", device_class="battery")
 # Documented snapshot fields: (endpoint or None for any, path matcher, spec). The first match applies.
-SNAPSHOT_FIELDS = (
+SNAPSHOT_FIELDS: tuple[tuple[str | None, PathMatcher, Spec], ...] = (
     ("status", prefix("tire"), Spec(0, 254, units=("psi", "kpa", "bar"), convert=scale_pressure,
                                      device_class="pressure")),
     ("batteries", exact(("charge", "stateOfCharge")), PERCENT),
@@ -239,7 +248,7 @@ SNAPSHOT_FIELDS = (
 )
 
 
-def snapshot_spec(endpoint, path):
+def snapshot_spec(endpoint: str, path: FieldPath) -> Spec | None:
     return next((spec for scope, matches, spec in SNAPSHOT_FIELDS
                  if scope in (None, endpoint) and matches(path)), None)
 
@@ -247,10 +256,11 @@ def snapshot_spec(endpoint, path):
 class Rejections:
     """Values present in a response but not turned into a reading, with the reason."""
 
-    def __init__(self, endpoint):
-        self.endpoint, self.count, self.examples = endpoint, 0, []
+    def __init__(self, endpoint: str) -> None:
+        self.endpoint, self.count = endpoint, 0
+        self.examples: list[dict[str, str | int | float | bool]] = []
 
-    def add(self, path, value, reason):
+    def add(self, path: str | tuple[object, ...], value: object, reason: str) -> None:
         path = ".".join(map(str, path)) if isinstance(path, tuple) else path
         if isinstance(value, (int, float)) and (not finite_number(value) or isinstance(value, int) and not -(2**63) <= value < 2**63):
             value = repr(value)[:100]
@@ -260,22 +270,24 @@ class Rejections:
                                   "reason": reason})
         LOGGER.debug("Pleos %s: ignored %s (%s)", self.endpoint, path, reason)
 
-    def attributes(self):
+    def attributes(self) -> dict[str, Any]:
         return {"rejected_values": self.count, "rejected_examples": self.examples}
 
 
-def readings(endpoint, data, vehicle_type, rejections=None):
+def readings(
+    endpoint: str, data: object, vehicle_type: str | None, rejections: Rejections | None = None
+) -> dict[str, Reading]:
     """Keep unknown fields as plain sensors; apply only documented semantics.
 
     Values present but not usable are reported to `rejections`; absent values (null)
     and values the API itself marks "invalid" are not rejections.
     """
-    result = {}
+    result: dict[str, Reading] = {}
     if not isinstance(data, dict):
         return result
     reject = rejections.add if rejections is not None else lambda *args: None
 
-    def walk(value, path=(), unit=None):
+    def walk(value: object, path: FieldPath = (), unit: str | None = None) -> None:
         if endpoint == "status" and path == ("warnings",):
             if value is None or value == "invalid":
                 return
@@ -319,7 +331,7 @@ def readings(endpoint, data, vehicle_type, rejections=None):
                     if (key := identifier(endpoint + "_warnings")) in result:
                         result[key]["attributes"] = {"warnings": list(value), "warning_count": len(value)}
                 return
-            occurrences = {}
+            occurrences: dict[str, int] = {}
             for index, child in enumerate(value):
                 part = child.get("type") if isinstance(child, dict) else None
                 if part is not None and part != "invalid" and not isinstance(part, str):
@@ -352,11 +364,11 @@ def readings(endpoint, data, vehicle_type, rejections=None):
         if numeric and not finite_number(value):
             reject(path, value, "not a finite number")
             return
-        opts = {}
+        opts: Reading = {}
         if numeric:
             if spec is None or spec.state_class is not None:
                 opts["state_class"] = spec.state_class if spec else "measurement"
-            if unit in UNITS:
+            if unit is not None and unit in UNITS:
                 opts["unit_of_measurement"] = UNITS[unit]
                 if unit in ("C", "F"):
                     opts["device_class"] = "temperature"
@@ -367,7 +379,7 @@ def readings(endpoint, data, vehicle_type, rejections=None):
         if key in ENUM_OPTIONS:
             raw = value
             if key == "batteries_charge_status":
-                value = CHARGING_STATES.get(value)
+                value = CHARGING_STATES.get(cast(str, value))
             if value not in ENUM_OPTIONS[key]:
                 reject(path, raw, "unexpected enum state")
                 return
@@ -405,33 +417,35 @@ def readings(endpoint, data, vehicle_type, rejections=None):
             base, _, slot = key.rpartition("_")
             if slot.isdigit() and base in NAMES:
                 name = NAMES[base] + " " + slot
-        result[key] = {"value": value, "name": name, "domain": domain, **opts}
+        normalized: Reading = {"value": value, "name": name, "domain": domain}
+        normalized.update(opts)
+        result[key] = normalized
 
     walk(data)
     return result
 
 
-def vehicle_id(brand, vin):
+def vehicle_id(brand: str, vin: str) -> str:
     return brand + "_" + hashlib.sha256(vin.encode()).hexdigest()[:16]
 
 
-def location(data):
+def location(data: object) -> LocationPoint | None:
     if not isinstance(data, dict) or reported_age(data.get("timestamp")) is None:
         return None
     point = data.get("location")
     if not isinstance(point, dict) or type(point.get("type")) is not int or point.get("type") != 0:
         return None
     lat, lon = point.get("latitude"), point.get("longitude")
-    if not all(finite_number(v) for v in (lat, lon)):
+    if not finite_number(lat) or not finite_number(lon):
         return None
-    return point if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+    return cast(LocationPoint, point) if -90 <= lat <= 90 and -180 <= lon <= 180 else None
 
 
 # Paths, ranges and units from the four Pleos trip-data response schemas. None marks a text field.
 SPEED_SAMPLE = Spec(0, 254, units=("kph", "mph"), unit_field="location.speedUnit", device_class="speed")
 TYRE_SAMPLE = Spec(0, 254, units=("psi", "kpa", "bar"), unit_field="tire.pressureUnit", convert=scale_pressure,
                    device_class="pressure")
-TRIP_FIELDS = {
+TRIP_FIELDS: dict[str, dict[str, Spec | None]] = {
     "powertrains/data": {
         "batteries.hv.voltage": Spec(0, 6553, unit="V", device_class="voltage"),
         "engine.oilTemperature": Spec(0, 150.5, unit="°C", device_class="temperature"),
@@ -488,12 +502,12 @@ TRIP_ENUM_OPTIONS = {
 }
 
 
-def new_trips(data, seen):
+def new_trips(data: object, seen: Collection[str]) -> list[Trip]:
     """Return valid trips whose start time is not in `seen`, oldest first."""
     trips = data.get("trips") if isinstance(data, dict) else None
     if not isinstance(trips, list):
         return []
-    fresh = {}
+    fresh: dict[str, Trip] = {}
     for trip in trips:
         if not isinstance(trip, dict) or reported_age(trip.get("triggerStartTime")) is None:
             continue
@@ -504,12 +518,12 @@ def new_trips(data, seen):
     return sorted(fresh.values(), key=lambda t: datetime.fromisoformat(t["triggerStartTime"].replace("Z", "+00:00")))
 
 
-def prune_seen(starts, max_age):
+def prune_seen(starts: Iterable[str], max_age: float) -> list[str]:
     """Drop remembered trip starts older than `max_age` seconds, or ones no longer parseable."""
     return sorted(start for start in starts if (age := reported_age(start)) is not None and age <= max_age)
 
 
-def trip_leaves(trip, path=()):
+def trip_leaves(trip: Mapping[str, Any], path: FieldPath = ()) -> Iterator[tuple[str, Any]]:
     """Every non-dict value of a trip with its dotted path, except the trip's start and length."""
     for key, value in trip.items():
         if not path and key in ("triggerStartTime", "tripLength"):
@@ -520,12 +534,12 @@ def trip_leaves(trip, path=()):
             yield ".".join((*path, str(key))), value
 
 
-def summary(values):
+def summary(values: Sequence[float]) -> dict[str, float]:
     return {"trip_min": min(values), "trip_max": max(values), "trip_mean": round(sum(values) / len(values), 3),
             "valid_samples": len(values)}
 
 
-def trip_summary(endpoint, trip):
+def trip_summary(endpoint: str, trip: Trip) -> dict[str, Any]:
     """Flat attributes describing one trip, for the Trip event entity.
 
     Field names follow the trip sensors without their endpoint prefix; numbers also get
@@ -534,7 +548,7 @@ def trip_summary(endpoint, trip):
     """
     current, start = trip_readings(endpoint, {"trips": [trip]})
     prefix = identifier(endpoint) + "_"
-    summary = {"trip_start": start}
+    summary: dict[str, Any] = {"trip_start": start}
     for key, reading in current.items():
         name = key.removeprefix(prefix)
         if name == "trip_start":
@@ -553,7 +567,9 @@ def trip_summary(endpoint, trip):
     return summary
 
 
-def trip_readings(endpoint, data, rejections=None):
+def trip_readings(
+    endpoint: str, data: object, rejections: Rejections | None = None
+) -> tuple[dict[str, Reading], str | None]:
     """Expose the latest trip's last samples; the API does not supply sample times.
 
     Documented fields use their spec; any other field becomes a plain reading. Present but
@@ -563,13 +579,13 @@ def trip_readings(endpoint, data, rejections=None):
     trips = data.get("trips") if isinstance(data, dict) else None
     if not isinstance(trips, list):
         return {}, None
-    valid = [trip for trip in trips if isinstance(trip, dict) and reported_age(trip.get("triggerStartTime")) is not None]
-    if not valid:
+    valid_trips = [trip for trip in trips if isinstance(trip, dict) and reported_age(trip.get("triggerStartTime")) is not None]
+    if not valid_trips:
         return {}, None
-    trip = max(valid, key=lambda t: datetime.fromisoformat(t["triggerStartTime"].replace("Z", "+00:00")))
-    start = trip["triggerStartTime"]
+    trip = max(valid_trips, key=lambda t: datetime.fromisoformat(t["triggerStartTime"].replace("Z", "+00:00")))
+    start = cast(str, trip["triggerStartTime"])
     prefix = identifier(endpoint)
-    result = {
+    result: dict[str, Reading] = {
         prefix + "_trip_start": {"name": label((ENDPOINT_NAMES[endpoint], "start")), "value": start,
                                 "device_class": "timestamp", "domain": "sensor", "historical": True},
     }
@@ -580,19 +596,19 @@ def trip_readings(endpoint, data, rejections=None):
             "unit_of_measurement": "s", "device_class": "duration", "domain": "sensor", "historical": True,
         }
 
-    def samples(path):
-        value = trip
+    def samples(path: str) -> list[Any]:
+        value: object = trip
         for part in path.split("."):
             value = value.get(part) if isinstance(value, dict) else None
         return value if isinstance(value, list) else []
 
-    def numeric_sample(field, spec, index):
+    def numeric_sample(field: str, spec: Spec, index: int) -> tuple[float, str | None] | None:
         """Return one valid sample as (value, unit), converted like the last-sample sensor."""
         values = samples(field)
         units = samples(spec.unit_field) if spec.unit_field else []
         raw_unit = units[index] if spec.unit_field and 0 <= index < len(units) else None
         value = spec.check(values[index] if 0 <= index < len(values) else None, raw_unit)
-        return None if value is None else (value, spec.unit or UNITS.get(raw_unit))
+        return None if value is None else (cast(float, value), spec.unit or (UNITS.get(raw_unit) if isinstance(raw_unit, str) else None))
 
     for field, spec in TRIP_FIELDS[endpoint].items():
         values = samples(field)
@@ -601,7 +617,7 @@ def trip_readings(endpoint, data, rejections=None):
             continue
         value, index = values[-1], len(values) - 1
         key = prefix + "_" + identifier(field)
-        reading = {"name": TRIP_NAMES[field] + " (last trip)", "value": value,
+        reading: Reading = {"name": TRIP_NAMES[field] + " (last trip)", "value": value,
                    "domain": "sensor", "historical": True,
                    "attributes": {"trip_start": start, "trip_length_ms": length, "sample_index": index}}
         if spec is None:
@@ -613,14 +629,14 @@ def trip_readings(endpoint, data, rejections=None):
                 if value not in (on, off):
                     reject(field, value, f"expected {on} or {off}")
                     continue
-                reading.update(domain="binary_sensor", device_class=device_class, value="ON" if value == on else "OFF")
+                reading.update({"domain": "binary_sensor", "device_class": device_class, "value": "ON" if value == on else "OFF"})
                 reading["attributes"]["raw_value"] = value
             elif key in TRIP_ENUM_OPTIONS:
                 normalized = LAMP_STATES.get(value) if key == "status_data_lamp_setting" else value
                 if normalized not in TRIP_ENUM_OPTIONS[key]:
                     reject(field, value, "unexpected enum state")
                     continue
-                reading.update(value=normalized, device_class="enum", options=list(TRIP_ENUM_OPTIONS[key]))
+                reading.update({"value": normalized, "device_class": "enum", "options": list(TRIP_ENUM_OPTIONS[key])})
                 if normalized != value:
                     reading["attributes"]["raw_value"] = value
                 if field in ("location.speedUnit", "tire.pressureUnit"):
@@ -650,24 +666,24 @@ def trip_readings(endpoint, data, rejections=None):
         key = prefix + "_" + identifier(field)
         if field in TRIP_FIELDS[endpoint] or key in result:
             continue
-        values = value if isinstance(value, list) else None
-        last = values[-1] if values else value
-        if last in (None, "invalid", "null") or values == []:
+        extra_values = value if isinstance(value, list) else None
+        last = extra_values[-1] if extra_values else value
+        if last in (None, "invalid", "null") or extra_values == []:
             continue
         name = label(tuple(field.split("."))) + " (last trip)"
         attributes = {"trip_start": start, "trip_length_ms": length}
-        if values is not None:
-            attributes |= {"sample_index": len(values) - 1, "total_samples": len(values)}
+        if extra_values is not None:
+            attributes |= {"sample_index": len(extra_values) - 1, "total_samples": len(extra_values)}
         reading = {"name": name, "domain": "sensor", "historical": True, "attributes": attributes}
         if isinstance(last, bool):
-            reading.update(domain="binary_sensor", value="ON" if last else "OFF")
+            reading.update({"domain": "binary_sensor", "value": "ON" if last else "OFF"})
         elif isinstance(last, (int, float)):
             if not finite_number(last):
                 reject(field, repr(last), "not a finite number")
                 continue
             reading["value"] = last
-            if values is not None:
-                attributes |= summary([sample for sample in values if finite_number(sample)])
+            if extra_values is not None:
+                attributes |= summary([sample for sample in extra_values if finite_number(sample)])
         elif isinstance(last, str) and len(last) <= 255:
             reading["value"] = last
         else:
@@ -677,7 +693,7 @@ def trip_readings(endpoint, data, rejections=None):
         result[key] = reading
 
     if endpoint == "driving/data":
-        spec = TRIP_FIELDS[endpoint]["odometer.value"]
+        spec = cast(Spec, TRIP_FIELDS[endpoint]["odometer.value"])
         mileage = [sample[0] for i in range(len(samples("odometer.value")))
                    if (sample := numeric_sample("odometer.value", spec, i)) is not None]
         if len(mileage) >= 2 and mileage[-1] >= mileage[0]:

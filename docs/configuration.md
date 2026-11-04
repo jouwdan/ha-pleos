@@ -12,7 +12,7 @@
 
 After validating your API key, setup shows an **Odometer** step for the cars on that account. **Correct odometer kilometres labelled as miles** is off by default. Select only cars whose API odometer value is in kilometres but labelled miles: this makes the displayed distance about 1.61 times too high. Correctly reported kilometres and miles need no correction. Home Assistant's unit preference controls how the distance is displayed.
 
-If unsure, leave the selection empty and compare the odometer with your car's dashboard after setup. You can change the same per-car setting later under **Configure → Vehicle status**. It affects new readings only; existing history and statistics are not repaired. Clear it if Pleos fixes the underlying unit label. Accounts with no vehicles skip this step.
+If unsure, leave the selection empty and compare the odometer with your car's dashboard after setup. You can change the same per-car setting later under **Configure → Freshness and privacy**. It affects new readings only; existing history and statistics are not repaired. Clear it if Pleos fixes the underlying unit label. Accounts with no vehicles skip this step.
 
 ## Multiple accounts
 
@@ -22,18 +22,16 @@ Account reconfiguration preserves entity and device IDs, statistics and archive 
 
 ## Options
 
-All settings are in one place: **Settings → Devices & services → Pleos Vehicle Data → Configure** on an account entry. The dialog has three sections, **Vehicle status**, **Trips** and **Storage**. Changes reload the integration. Everything not listed here works without configuration, including the **Trip** event entity and the trip statistics.
+All settings are in one place: **Settings → Devices & services → Pleos Vehicle Data → Configure** on an account entry. The dialog has three sections, **Freshness and privacy**, **Trips** and **Storage**. Changes reload the integration. Everything not listed here works without configuration, including the **Trip** event entity and the trip statistics.
 
 | Section | Option | Default | Range | Effect |
 | --- | --- | --- | --- | --- |
-| Vehicle status | **Polling interval** | 15 min | 5–1440 min | How often status data is requested. The car uploads on its own schedule, so polling more often does not make data newer. |
-| Vehicle status | **Stale-data threshold** | 60 min | 5–10080 min | Readings older than this get `data_stale: true`. They stay available. |
-| Vehicle status | **Enable location data and GPS tracking** | On | | Requests the location endpoint and creates the GPS tracker. Off: neither. |
-| Vehicle status | **Reverse geocode vehicle location** | Off | | Resolves valid GPS coordinates to a human-readable **Address** sensor. Requires location data and a configured Nominatim-compatible service. |
-| Vehicle status | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. Put credentials in the separate key field; URLs with login details, query parameters or fragments are rejected. Redirects are not followed. No coordinates are sent when empty. |
-| Vehicle status | **Reverse geocoding API key / token** | Empty | | Optional provider credential. For compatible Nominatim-style services it is sent as the `key` parameter. It is sent only to the configured service and redacted from diagnostics. |
-| Vehicle status | **Correct odometer kilometres labelled as miles** | No cars selected | Per car | Treats a selected car's snapshot odometer value as kilometres when the API labels it miles. Use only for a confirmed unit-label error; see [Units](entities.md#units). |
-| Trips | **Trip data interval** | 60 min | 5–1440 min | How often the four trip endpoints are requested. Failed trip requests retry at the next status poll. |
+| Freshness and privacy | **Stale-data threshold** | 60 min | 5–10080 min | Readings older than this get `data_stale: true`. They stay available. |
+| Freshness and privacy | **Enable location data and GPS tracking** | On | | Requests the location endpoint and creates the GPS tracker. Off: neither. |
+| Freshness and privacy | **Reverse geocode vehicle location** | Off | | Resolves valid GPS coordinates to a human-readable **Address** sensor. Requires location data and a configured Nominatim-compatible service. |
+| Freshness and privacy | **Reverse geocoding service URL** | Empty | | User-selected Nominatim-compatible endpoint. A base URL or `/reverse` endpoint is accepted. Put credentials in the separate key field; URLs with login details, query parameters or fragments are rejected. Redirects are not followed. No coordinates are sent when empty. |
+| Freshness and privacy | **Reverse geocoding API key / token** | Empty | | Optional provider credential. For compatible Nominatim-style services it is sent as the `key` parameter. It is sent only to the configured service and redacted from diagnostics. |
+| Freshness and privacy | **Correct odometer kilometres labelled as miles** | No cars selected | Per car | Treats a selected car's snapshot odometer value as kilometres when the API labels it miles. Use only for a confirmed unit-label error; see [Units](entities.md#units). |
 | Trips | **Fire an event for each new trip** | Off | | Fires `pleos_vehicle_data_trip` with every sample; see [Trip events](trips.md#trip-events). The **Trip** event entity works regardless of this option. |
 | Storage | **Archive raw vehicle data** | Off | | Keeps raw responses in compressed files; see [Response archive](trips.md#response-archive). |
 
@@ -41,11 +39,21 @@ Reverse-geocoding providers have their own usage, caching and attribution terms.
 
 Pleos account credentials are not options: replace them with **⋮ → Reconfigure**; see [Expired or replaced API keys](troubleshooting.md#expired-or-replaced-api-keys).
 
+## Polling cadence
+
+The integration requests vehicle snapshots every 15 minutes and completed-trip data every 60 minutes. Vehicles upload on their own schedule and trip data can arrive hours after a drive; these intervals balance useful updates with cloud request volume. Failed trip requests retry at the next snapshot poll. Existing custom interval settings are removed automatically on upgrade; freshness, location, geocoding, calibration, events and archive choices are preserved.
+
 ## Refresh on demand
 
 Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in Home Assistant's action editor or an automation, and select the **Account** to refresh. It waits for the requested or already running poll to complete. Repeated requests are batched, and trip polling intervals and API rate-limit backoff still apply. A failed account request or requested endpoint raises an action error; healthy endpoints still update. Disabling an endpoint, reusing trips between scheduled polls, and a successful `no_data` response are not failures. Unloading the account before completion also reports an action error.
 
 This fetches data already available in Pleos. It cannot wake the car or make it upload new readings, so the returned values may be unchanged.
+
+## Removing a vehicle that left the account
+
+After a successful account refresh confirms a vehicle is no longer listed by Pleos, open its device page and choose **Delete**. This removes that device and its entities; the account and its other vehicles stay configured. Vehicles are never deleted automatically.
+
+Removal is blocked for vehicles still listed, the account API device, unloaded accounts, and failed or malformed account responses. Retry after the connection recovers. Existing recorder history, imported trip statistics and raw archives follow their existing retention policies.
 
 ## Removing the integration
 
@@ -63,5 +71,7 @@ To replace credentials or temporarily stop polling, use reconfiguration or disab
 
 1. Replace `my_car_` with your car's entity-ID prefix and `hyundai_api_` with `kia_api_` or `genesis_api_` if needed. Check the full IDs against your entity list: older installations and customised IDs may also have different suffixes. Update these in both cards and markdown templates; some templates assemble IDs from a prefix and suffix.
 2. In Home Assistant, add a dashboard, open it, then choose **⋮ → Edit → ⋮ → Raw configuration editor** and paste the file.
+
+On a new installation, enable the endpoint API and data-age diagnostic entities used by the dashboard if you want its diagnostic tables and freshness tiles. Existing enabled entities remain enabled.
 
 Missing tiles, gauges, map and badges are hidden outside edit mode. Trip cards fill in as valid samples arrive; graphs need recorded history. Missing trip distance is shown as unavailable. Summary tables label API units separately from converted sensor states. The VIN is masked to its last six characters.

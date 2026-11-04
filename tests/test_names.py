@@ -14,7 +14,7 @@ from custom_components.pleos_vehicle_data.binary_sensor import ReadingBinarySens
 from custom_components.pleos_vehicle_data.const import DOMAIN, ENDPOINTS, TRIP_ENDPOINTS
 from custom_components.pleos_vehicle_data.data import TRIP_FIELDS, readings, trip_readings, vehicle_id
 from custom_components.pleos_vehicle_data.device_tracker import VehicleTracker
-from custom_components.pleos_vehicle_data.names import ENTITY_NAMES
+from custom_components.pleos_vehicle_data.names import ENTITY_NAMES, NUMBERED_RANGE_NAMES, entity_translation_key
 from custom_components.pleos_vehicle_data.sensor import ConnectionSensor, ReadingSensor
 
 from support import CAR, HomeAssistantTestCase, stamp
@@ -90,7 +90,26 @@ class TranslationFileTests(unittest.TestCase):
         # Every translation (apart from coordinator-built entities) is produced by some documented field.
         coordinator_built = {"connection", "last_successful_poll", "archive", "vehicle_information", "trip", "estimated_ev_consumption", "location_address"} | {
             key for key in translated if key.endswith(("_api", "_reported_at", "_data_age"))}
-        self.assertEqual(translated - set(produced) - coordinator_built - {"location"}, set())
+        self.assertEqual(translated - set(produced) - coordinator_built - {"location"} - set(NUMBERED_RANGE_NAMES), set())
+
+    def test_supported_numbered_ranges_use_a_translated_slot_name(self):
+        for platform, key, expected in (
+            ("sensor", "powertrains_distancetoempties_phev_2", "powertrains_distancetoempties_phev_numbered"),
+            ("sensor", "powertrains_distancetoempties_ev_10", "powertrains_distancetoempties_ev_numbered"),
+            ("sensor", "powertrains_distancetoempties_ev_1", None),
+            ("sensor", "powertrains_distancetoempties_ev_02", None),
+            ("sensor", "powertrains_distancetoempties_ev_numbered", None),
+            ("sensor", "powertrains_distancetoempties_unknown_2", None),
+            ("binary_sensor", "powertrains_distancetoempties_ev_2", None),
+        ):
+            with self.subTest(platform=platform, key=key):
+                self.assertEqual(entity_translation_key(platform, key), expected)
+
+    def test_every_endpoint_diagnostic_has_translated_states(self):
+        translations = json.loads((COMPONENT / "strings.json").read_text())["entity"]["sensor"]
+        for endpoint in ENDPOINTS:
+            self.assertEqual(set(translations[endpoint.replace("/", "_") + "_api"]["state"]),
+                             {"available", "no_data", "error", "disabled"})
 
 
 class EntityNameTests(HomeAssistantTestCase):
@@ -194,6 +213,34 @@ class EntityNameTests(HomeAssistantTestCase):
         self.assertEqual((level, connection), ("sensor.van_battery_level", "sensor.kia_api_connection"))
         self.assertEqual(self.hass.states.get(level).name, "Van Batteriestand")
         await platform.async_reset()
+
+    async def test_numbered_range_names_translate_without_changing_english_entity_ids(self):
+        self.hass.config.language = "de"
+        await entity_registry.async_load(self.hass, load_empty=True)
+        self.client.vehicles = AsyncMock(return_value=[CAR | {"nickname": "Van"}])
+        payload = {"timestamp": stamp(), "distanceToEmpties": [
+            {"type": "PHEV", "value": value, "unit": "km"} for value in (120, 50)]}
+        self.client.get = AsyncMock(side_effect=lambda path: payload if path.endswith("/powertrains") else None)
+        await self.coordinator.async_refresh()
+        car_id = vehicle_id("kia", CAR["vin"])
+        key = "powertrains_distancetoempties_phev_2"
+        sensor = ReadingSensor(self.coordinator, car_id, key, self.coordinator.data["cars"][car_id]["readings"][key])
+        self.assertEqual(sensor.translation_key, "powertrains_distancetoempties_phev_numbered")
+        self.assertEqual(sensor.translation_placeholders, {"index": "2"})
+        platform = EntityPlatform(hass=self.hass, logger=logging.getLogger(__name__), domain="sensor",
+                                  platform_name=DOMAIN, platform=None, scan_interval=timedelta(minutes=15),
+                                  entity_namespace=None)
+        platform.config_entry = self.entry
+        self.addAsyncCleanup(platform.async_reset)
+
+        async def translations(hass, language, category, integrations):
+            return {f"component.{DOMAIN}.entity.sensor.{sensor.translation_key}.name": "Hybridreichweite {index}"}
+
+        with patch("homeassistant.helpers.translation.async_get_translations", side_effect=translations):
+            await platform.platform_data.async_load_translations()
+            await platform.async_add_entities([sensor])
+        self.assertEqual(sensor.entity_id, "sensor.van_plug_in_hybrid_range_2")
+        self.assertEqual(self.hass.states.get(sensor.entity_id).name, "Van Hybridreichweite 2")
 
 if __name__ == "__main__":
     unittest.main()

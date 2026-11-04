@@ -48,6 +48,23 @@ class CoordinatorTests(HomeAssistantTestCase):
         del self.coordinator.data["cars"][car_id]["readings"][sensor.key]
         self.assertTrue(sensor.available)
         self.assertIsNone(sensor.native_value)
+        del self.coordinator.data["cars"][car_id]
+        self.assertIsNone(sensor.reported_at)
+
+    async def test_non_text_reporting_time_never_becomes_current_state(self):
+        for timestamp in (123, False, [], {}):
+            with self.subTest(timestamp=timestamp):
+                await self.populate({"timestamp": timestamp, "charge": {"stateOfCharge": 50}})
+                car_id = vehicle_id("kia", CAR["vin"])
+                car = self.coordinator.data["cars"][car_id]
+                self.assertIsNone(car["sources"]["batteries"])
+                self.assertNotIn("batteries_reported_at", car["readings"])
+                self.assertNotIn("batteries_data_age", car["readings"])
+                sensor = ReadingSensor(
+                    self.coordinator, car_id, "batteries_charge_stateofcharge",
+                    car["readings"]["batteries_charge_stateofcharge"],
+                )
+                self.assertIsNone(sensor.native_value)
 
     async def test_partial_endpoint_and_network_failure(self):
         self.client.vehicles = AsyncMock(return_value=[CAR])
@@ -66,6 +83,7 @@ class CoordinatorTests(HomeAssistantTestCase):
 
     async def test_dynamic_discovery_has_no_duplicates(self):
         await self.populate()
+        await entity_registry.async_load(self.hass, load_empty=True)
         self.entry.runtime_data = self.coordinator
         added = MagicMock()
         discover(self.entry, added, "sensor", ReadingSensor)
@@ -74,6 +92,11 @@ class CoordinatorTests(HomeAssistantTestCase):
         self.assertEqual(added.call_count, first)
         car_id = vehicle_id("kia", CAR["vin"])
         self.coordinator.data["cars"][car_id]["readings"]["new_field"] = {"name": "New", "source": "status", "value": "open", "domain": "sensor"}
+        self.coordinator.async_update_listeners()
+        self.assertEqual(added.call_count, first)
+        self.coordinator.data["cars"][car_id]["readings"]["status_outsidetemperature"] = {
+            "name": "Outside temperature", "source": "status", "value": 10, "domain": "sensor",
+        }
         self.coordinator.async_update_listeners()
         self.assertEqual(added.call_count, first + 1)
 

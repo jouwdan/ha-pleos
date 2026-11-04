@@ -4,12 +4,13 @@ The standards work starts from `v0.11.0` / `b61b450`, rather than the older 0.6.
 
 ## Reproduce validation
 
-Use Python 3.14 and an isolated environment. Install `requirements-test.txt` for the declared minimum Home Assistant version (2026.10.0), or `requirements-test-current.txt` for the current CI target (2026.10.4). Both versions passed [hosted validation](https://github.com/jouwdan/ha-pleos/actions/runs/41636070774), including HACS and Hassfest. Local validation also passed on 2026.10.1. The existing unit tests are collected by pytest.
+Use Python 3.14 and an isolated environment. Install `requirements-test.txt` for the declared minimum Home Assistant version (2026.10.0), or `requirements-test-current.txt` for the current CI target (2026.10.4). The workflow checks both versions, HACS and Hassfest. Local validation also runs on 2026.10.1. The existing unit tests are collected by pytest. Mypy checks the integration with `strict = true`; `follow_imports = "silent"` retains dependency signatures while limiting diagnostics to the integration. Official HA containers install Core as an editable source tree, so CI sets `MYPYPATH=/usr/src/homeassistant` to check the actual HA APIs.
 
 Install both published libraries at the versions pinned in `custom_components/pleos_vehicle_data/manifest.json`. Their source, tests and release workflows live in [`pleos-client`](https://github.com/jouwdan/pleos-client) and [`nominatim-reverse-client`](https://github.com/jouwdan/nominatim-reverse-client). Then run:
 
 ```sh
 python -m ruff check .
+python -m mypy
 python -m coverage run -m pytest -q
 python -m coverage report
 python -m coverage report --include='*/config_flow.py' --fail-under=100
@@ -18,6 +19,10 @@ python -m coverage report --include='*/config_flow.py' --fail-under=100
 The workflow also checks every integration module against a threshold above 95%, so a high total cannot hide an untested platform. Tests disable network access; synthetic requests never contact vehicles or geocoding providers. Each library separately runs its own tests, lint/type checks, wheel/source builds and distribution checks.
 
 ### Completed checks
+
+The 0.13.0 candidate passes 291 tests and 610 subtests on Home Assistant 2026.10.0 and 2026.10.4 in [hosted CI](https://github.com/jouwdan/ha-pleos/actions/runs/41804463076), and locally on 2026.10.1, with 98.79% branch coverage, 100% config-flow coverage and every module above 95%. Strict mypy passes all 21 integration modules; Ruff, HACS and Hassfest pass. Regression tests cover polling migration, supported/legacy entities, first-registration defaults, guarded device removal and rediscovery after a removed vehicle returns without a reload.
+
+The 2026-11-04 live upgrade from 0.12.0 to 0.13.0 on HA 2026.10.4 passed configuration validation, restart, manual refresh and entry reload. Migration removed only the retired polling fields; account data and all 88 registry identities/preferences stayed unchanged. The trip deduplication store, statistics ledger, 100 recorder statistics rows and cumulative EV totals were preserved, with no repeated trip event. The account remained connected and Pleos/geocoder logs contained no warnings or errors. A local pre-upgrade backup was retained. New-entity defaults and stale-device removal are tested synthetically; the live vehicle was not deleted.
 
 Development checkpoints were tested independently on Home Assistant 2026.10.1. They were combined into the [0.12.0 integration release](https://github.com/jouwdan/ha-pleos/releases/tag/v0.12.0):
 
@@ -31,7 +36,7 @@ All three have 100% config-flow coverage and every integration module above 95%.
 
 Both library wheels pass tests on Python 3.11 and 3.14: `pleos-client` has 31 tests and 99% branch coverage; `nominatim-reverse-client` has 13 tests and 100% branch coverage. Strict mypy, Ruff, source/wheel builds, Twine checks and fresh-wheel installations passed locally and in hosted CI. Pleos 0.2.0 and geocoder 0.1.0 were published on PyPI before 0.12.0; fresh installations and the complete [published-dependency validation](https://github.com/jouwdan/ha-pleos/actions/runs/41643712111) passed.
 
-The 0.12.0 live pilot passed restart, account polling, manual refresh and config-entry reload checks, preserving entity identities, preferences and saved values. A real drive, charging session and natural outage recovery remain untested by that pilot.
+The 0.12.0 live pilot passed restart, account polling, manual refresh and config-entry reload checks, preserving entity identities, preferences and saved values. The 2026-11-04 real-drive follow-up also passed: mileage and all four tyre caches updated, a completed trip arrived once, and driving-time statistics were imported. Another config-entry reload preserved trip/statistics stores and all 88 identities/preferences, with no Pleos/geocoder warnings or errors. Charging and natural outage recovery remain untested.
 
 ## Upgrade invariants
 
@@ -53,14 +58,15 @@ Public lifecycle tests cover both legacy and current account namespaces. Dedicat
 | Finding | Stage and evidence |
 | --- | --- |
 | HA lifecycle / same-flow recovery | Stage 2: `test_lifecycle.py`, `test_flow_manager.py`, existing config-flow tests; preserve the odometer setup step. |
-| Module coverage / lint / typed entry | Stage 2: CI matrix, per-module coverage, Ruff, `models.PleosConfigEntry`. Full strict typing remains later work. |
+| Module coverage / lint / typed entry | Stage 2: CI matrix, per-module coverage, Ruff, `models.PleosConfigEntry`. All 21 integration modules now pass strict mypy, including normalized readings, coordinator data, storage records and platform callbacks. |
 | Field help / removal docs / concurrency | Stage 2: English translations, configuration/removal guide, all four platform declarations. |
 | Pleos protocol boundary | Stage 3: client 0.2.0 owns URL/query construction and range fallback; integration tests preserve UTC queries and response metadata. |
 | Geocoder protocol boundary | Stage 3: independent `nominatim-reverse-client`; HA retains privacy choices, caching and state formatting. |
 | Availability / refresh failures / logging | Stage 4: current versus historical state semantics, real debouncer and entry-unload tests, endpoint transition logs. |
-| Polling options | Later work: intervals remain unchanged in this release. |
+| Polling options | 0.13.0: managed 15-minute snapshots / 60-minute trips; minor-version migration removes only retired interval settings. |
 | Account identity | Investigation only: the current client exposes vehicles and tokens, not a validated stable account identifier. Duplicate checks remain key-based. No namespace migration or vehicle-list hash. |
-| Default entities / dynamic translations / stale devices | Later stage: do not retire entities or delete registry entries during this work. |
+| Default entities / translations | 0.13.0: supported field catalog, translated numbered ranges, first-registration diagnostic defaults; existing user choices preserved. |
+| Stale devices | 0.13.0: explicit device removal only after a successful list omits the vehicle; active, failed, unloaded and foreign-account cases are protected. |
 | Official tier / Core submission | Later stage: no official tier is claimed for this custom integration. Prepare the minimal Core submission separately. |
 
 ## Library ownership

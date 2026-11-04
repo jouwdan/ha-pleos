@@ -67,10 +67,9 @@
         "description": "Options reload this integration automatically.",
         "sections": {
           "polling": {
-            "name": "Vehicle status",
-            "description": "More frequent polling does not make the car upload sooner. Valid last-reported values stay visible while the car is parked.",
+            "name": "Freshness and privacy",
+            "description": "Vehicle snapshots are requested every 15 minutes. More frequent requests do not make the car upload sooner. Valid last-reported values stay visible while the car is parked.",
             "data": {
-              "poll_minutes": "Polling interval",
               "stale_minutes": "Stale-data threshold",
               "location": "Enable location data and GPS tracking",
               "odometer_km_vehicles": "Correct odometer kilometres labelled as miles",
@@ -79,7 +78,6 @@
               "geocoder_key": "Reverse geocoding API key / token"
             },
             "data_description": {
-              "poll_minutes": "How often status data is requested from Pleos. Trip data has its own interval under Trips.",
               "stale_minutes": "Older readings are marked with data_stale; they do not become unavailable.",
               "location": "Queries the location endpoint and exposes its data. A map tracker is created only for valid WGS84 coordinates.",
               "odometer_km_vehicles": "Select only cars whose API odometer value is in kilometres but labelled miles. Home Assistant will then convert it to your preferred display unit. Leave empty for correctly reported units. This affects new readings only; existing history and statistics are not repaired. Clear the selection if Pleos fixes the underlying data.",
@@ -91,13 +89,12 @@
           "trips": {
             "name": "Trips",
             "data": {
-              "trip_poll_minutes": "Trip data interval",
               "trip_events": "Fire an event for each new trip"
             },
             "data_description": {
-              "trip_poll_minutes": "How often the four trip endpoints are queried. Pleos delivers trip data with a delay, so this can be longer than the polling interval. Trip readings are kept between queries.",
               "trip_events": "Off by default. Fires pleos_vehicle_data_trip once per trip with every sample the API returned. Large trips can be excluded from the recorder. The Trip event entity records every trip regardless of this option."
-            }
+            },
+            "description": "Trip data is requested every 60 minutes because Pleos publishes completed trips with a delay. Trip readings are kept between queries."
           },
           "storage": {
             "name": "Storage",
@@ -122,7 +119,13 @@
         }
       },
       "batteries_api": {
-        "name": "Battery charging API"
+        "name": "Battery charging API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "batteries_charge_batterycapacity": {
         "name": "Battery capacity"
@@ -169,7 +172,13 @@
         }
       },
       "driving_api": {
-        "name": "Driving status API"
+        "name": "Driving status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "driving_data_acceleration_longitudinal": {
         "name": "Forward acceleration (last trip)"
@@ -181,7 +190,13 @@
         "name": "Turning rate (last trip)"
       },
       "driving_data_api": {
-        "name": "Driving trips API"
+        "name": "Driving trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "driving_data_isla_optionusm": {
         "name": "Speed limit assist setting (last trip)",
@@ -250,7 +265,13 @@
         "name": "Driving status last reported"
       },
       "freezer_api": {
-        "name": "Freezer status API"
+        "name": "Freezer status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "freezer_data_age": {
         "name": "Freezer status data age"
@@ -265,7 +286,13 @@
         "name": "Last successful poll"
       },
       "locations_api": {
-        "name": "Location API"
+        "name": "Location API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "locations_data_age": {
         "name": "Location data age"
@@ -292,7 +319,13 @@
         "name": "Location last reported"
       },
       "powertrains_api": {
-        "name": "Powertrain status API"
+        "name": "Powertrain status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "powertrains_batteries_main_remainratio": {
         "name": "Traction battery level"
@@ -301,7 +334,13 @@
         "name": "Powertrain status data age"
       },
       "powertrains_data_api": {
-        "name": "Powertrain trips API"
+        "name": "Powertrain trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "powertrains_data_batteries_hv_voltage": {
         "name": "Traction battery voltage (last trip)"
@@ -340,7 +379,13 @@
         "name": "Powertrain status last reported"
       },
       "speed_api": {
-        "name": "Speed trips API"
+        "name": "Speed trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "speed_location_speed": {
         "name": "Speed (last trip)"
@@ -371,7 +416,13 @@
         "name": "Rear right wheel speed (last trip)"
       },
       "status_api": {
-        "name": "Vehicle status API"
+        "name": "Vehicle status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "status_climatecontrol_mode": {
         "name": "Climate mode",
@@ -404,7 +455,13 @@
         "name": "Vehicle status data age"
       },
       "status_data_api": {
-        "name": "Vehicle status trips API"
+        "name": "Vehicle status trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "status_data_lamp_setting": {
         "name": "Exterior light setting (last trip)",
@@ -577,6 +634,21 @@
       },
       "location_address": {
         "name": "Address"
+      },
+      "powertrains_distancetoempties_ev_numbered": {
+        "name": "EV range {index}"
+      },
+      "powertrains_distancetoempties_fcev_numbered": {
+        "name": "Hydrogen range {index}"
+      },
+      "powertrains_distancetoempties_hev_numbered": {
+        "name": "Hybrid range {index}"
+      },
+      "powertrains_distancetoempties_ice_numbered": {
+        "name": "Fuel range {index}"
+      },
+      "powertrains_distancetoempties_phev_numbered": {
+        "name": "Plug-in hybrid range {index}"
       }
     },
     "binary_sensor": {

@@ -11,7 +11,7 @@ Each account entry creates an **API device** (for example *Kia API* or *Kia 2 AP
 | API device | **Connection** | `connected`, `no_vehicles` (the key works but grants no car; see [No vehicles](troubleshooting.md#no-vehicles)), `key_required` (replace the personal key), `api_unavailable` (Pleos could not be reached) or `rate_limited` (Pleos asked to slow down; requests pause until it allows them again) |
 | API device | **Archive** | Only when the archive is enabled: `ok` or `error`, with the folder, last write and last error |
 | API device | **Last successful poll** | When Home Assistant last completed this account's poll without request errors. This is the fetch completion time, not when the car uploaded its data. |
-| Car | Readings | One sensor or binary sensor per value the API returns, for example **Battery level**, **Odometer**, **Front left door** |
+| Car | Readings | Supported sensors and binary sensors when the API supplies valid values, for example **Battery level**, **Odometer**, **Front left door** |
 | Car | **(last trip)** sensors | The latest trip's final sample per trip field, with [trip summaries](trips.md#trip-readings) |
 | Car | **Trip** | Event entity firing once per trip; see [Trip event entity](trips.md#trip-event-entity) |
 | Car | **Location** | GPS tracker, when location is enabled and the car reports valid WGS84 coordinates |
@@ -20,6 +20,12 @@ Each account entry creates an **API device** (for example *Kia API* or *Kia 2 AP
 | Car | ***Endpoint* last reported**, ***Endpoint* data age** | Diagnostic, per status endpoint: when the car last reported that data and how old it is |
 
 **Last successful poll** advances only when the vehicle list and all endpoints requested in that poll finish without errors. Disabled endpoints, trip data reused between scheduled trip polls, and an API `no_data` result do not count as failures. Authentication, connection, rate-limit and individual endpoint errors leave the timestamp unchanged. It remains visible during failures and starts unknown after setup/reload until a poll succeeds. Check each car's **last reported** and **data age** sensors for the age of the actual vehicle readings; a successful poll can return old data.
+
+## Supported entities and defaults
+
+New entities are limited to the documented snapshot and trip fields listed below, plus numbered range readings when the API returns more than one range of the same kind. Their names use translation keys. Existing entities from undocumented fields retain their IDs and names; new undocumented fields remain available in diagnostics and optional raw archives without creating entities automatically.
+
+New **endpoint API**, **last reported**, **data age**, **coordinate system**, trip-unit diagnostics and **Last successful poll** entities are disabled by default. Enable the ones you need in **Settings → Devices & services → Entities**. Connection, Vehicle information and Archive remain enabled. Upgrades preserve existing enabled/disabled choices, names, units and entity IDs.
 
 ## Native entity types
 
@@ -143,7 +149,7 @@ All ten common Vehicle Data API endpoints are queried. Fields appear when the AP
 | [Driving trips](https://document.pleos.ai/en/api-reference/vehicle-data-api/vehicle-data-api/common/get-vehicle-operation-data) | `driving/data` | Ignition, mileage, trip distance, acceleration, yaw, ISLA settings, seat belts, steering and gear samples |
 | [Vehicle status trips](https://document.pleos.ai/en/api-reference/vehicle-data-api/vehicle-data-api/common/get-vehicle-data) | `status/data` | Door, lamp, tyre-pressure, low-fuel-warning and outside-temperature samples |
 
-Each endpoint has an **API diagnostic sensor** showing `available`, `no_data`, `error` or `disabled`. Permission and unregistered-vehicle errors show `error`; code `4045` means `no_data`. The `data` attribute holds the complete vehicle payload, including fields without a dedicated sensor, and `api_metadata` holds response metadata.
+Each endpoint has an **API diagnostic sensor**, disabled by default for new entities, showing `available`, `no_data`, `error` or `disabled`. Permission and unregistered-vehicle errors show `error`; code `4045` means `no_data`. The `data` attribute holds the complete vehicle payload, including fields without a dedicated sensor, and `api_metadata` holds response metadata.
 
 The `rejected_values` and `rejected_examples` attributes explain discarded readings, such as values outside the documented range or in an unknown unit. Empty fields and the API's `invalid` markers are not counted. Debug logs include the field and reason without the raw value. The **Vehicle information** sensor exposes VIN, nickname, model and powertrain details, plus other fields returned by Get Vehicles.
 

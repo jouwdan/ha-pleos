@@ -4,17 +4,17 @@
 
 ## Trip readings
 
-Trip queries run every **60 minutes** by default, separately from status polling, and normally cover **yesterday and today in UTC**. After a gap, they reach back to the last successful fetch, up to **7 days** including today. First setup also checks this wider window. If Pleos refuses the range, the integration retries with two days. The diagnostic sensor's `query` attribute shows the dates requested.
+Trip queries run every **60 minutes**, separately from status polling, and normally cover **yesterday and today in UTC**. After a gap, they reach back to the last successful fetch, up to **7 days** including today. First setup also checks this wider window. If Pleos refuses the range, the integration retries with two days. The diagnostic sensor's `query` attribute shows the dates requested.
 
 Trip sensors keep their results between queries. New vehicles are queried immediately; failed requests retry on the next status poll. `no_data` results wait for the normal trip interval. Pleos delivers trips with a delay, so polling more often may return the same data.
 
-Full returned trips remain in the diagnostic sensor's `data` attribute. Individual trip sensors show the latest trip's final sample when valid, with trip start, duration and sample index.
+Full returned trips remain in the diagnostic sensor's `data` attribute; enable that diagnostic entity if it is disabled. Individual trip sensors show the latest trip's final sample when valid, with trip start, duration and sample index.
 
 Missing final samples (`null`, the text `"null"`, or `"invalid"`) do not produce a reading or a rejected-value warning. Earlier samples are not substituted for a missing final state. The speed-limit-assist value `warning` is a setting, not an active vehicle fault; `none` is also a valid setting.
 
 Numeric trip sensors have `trip_min`, `trip_max`, `trip_mean`, `valid_samples` and `total_samples` attributes. Summaries use valid samples in the final sample's unit; the mean is per sample, not time-weighted. Home Assistant can convert the sensor state to your preferred unit without converting these attributes. Each endpoint reports its own latest trip, so its readings may refer to a different drive.
 
-**Trip distance (last trip)** is the difference between the first and last valid odometer samples of the latest driving trip. Its `odometer_start` and `odometer_end` attributes are in kilometres. An invalid final sample does not become a reading. Undocumented fields also get **(last trip)** readings, with numeric summaries where possible. Individual samples have no documented timestamps.
+**Trip distance (last trip)** is the difference between the first and last valid odometer samples of the latest driving trip. Its `odometer_start` and `odometer_end` attributes are in kilometres. An invalid final sample does not become a reading. Existing **(last trip)** entities for undocumented fields continue updating. New undocumented fields stay in the diagnostic payload and trip summaries without creating new entities. Individual samples have no documented timestamps.
 
 ## Trip event entity
 

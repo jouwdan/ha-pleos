@@ -121,10 +121,12 @@ class TripPollingTests(HomeAssistantTestCase):
         await self.coordinator._async_update_data()
         self.assertEqual(self.client.get.await_count, 10)
 
-    async def test_trip_interval_option_and_new_vehicles_are_fetched_at_once(self):
-        self.hass.config_entries.async_update_entry(self.entry, options={"trip_poll_minutes": 5})
+    async def test_managed_interval_ignores_legacy_options_and_new_vehicles_are_fetched_at_once(self):
+        self.hass.config_entries.async_update_entry(self.entry, options={"poll_minutes": 5, "trip_poll_minutes": 5})
         coordinator = PleosCoordinator(self.hass, self.entry, self.client)
         self.addAsyncCleanup(coordinator.async_shutdown)
+        self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
+        self.assertEqual(coordinator.trips.interval, timedelta(minutes=60))
         self.serve_trips()
         await coordinator._async_update_data()
         for cached in coordinator.trips.cache.values():
@@ -133,7 +135,7 @@ class TripPollingTests(HomeAssistantTestCase):
         self.client.vehicles = AsyncMock(return_value=[CAR, other])
         self.client.get.reset_mock()
         await coordinator._async_update_data()
-        self.assertEqual(self.client.get.await_count, 20)
+        self.assertEqual(self.client.get.await_count, 16)
         self.client.get.reset_mock()
         await coordinator._async_update_data()
         self.assertEqual(self.client.get.await_count, 12)

@@ -228,7 +228,7 @@ class NativeEntityTests(HomeAssistantTestCase):
         self.entry.runtime_data = self.coordinator
         added = MagicMock()
         await setup_binary_sensors(self.hass, self.entry, added)
-        for item, expected in zip(old, (entity_registry.RegistryEntryDisabler.INTEGRATION,
+        for item, expected in zip(old, (None,
                                        entity_registry.RegistryEntryDisabler.USER, None, None)):
             current = registry.async_get(item.entity_id)
             self.assertEqual(current.disabled_by, expected)
@@ -304,6 +304,11 @@ class NativeEntityTests(HomeAssistantTestCase):
                 await platform.async_add_entities(entities)
                 for entity in entities:
                     state = self.hass.states.get(entity.entity_id)
+                    if not entity.entity_registry_enabled_default:
+                        self.assertIsNone(state, entity.key)
+                        registered = entity_registry.async_get(self.hass).async_get(entity.entity_id)
+                        self.assertIs(registered.disabled_by, entity_registry.RegistryEntryDisabler.INTEGRATION)
+                        continue
                     self.assertIsNotNone(state, entity.key)
                     self.assertNotIn(state.state, ("unknown", "unavailable"), entity.key)
             self.assertGreater(len(self.hass.states.async_all()), 100)
