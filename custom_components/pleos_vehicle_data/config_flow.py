@@ -1,17 +1,20 @@
 """Guided setup and replacement of manually renewed personal API keys."""
 
 from uuid import uuid4
+from collections.abc import Mapping
+from typing import Any
 
 import probatio as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector, NumberSelector, NumberSelectorConfig, NumberSelectorMode,
-    SelectSelector, SelectSelectorConfig, SelectSelectorMode,
+    SelectOptionDict, SelectSelector, SelectSelectorConfig, SelectSelectorMode,
     TextSelector, TextSelectorConfig, TextSelectorType,
 )
 
@@ -33,7 +36,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 2
 
-    async def validate(self, brand, user_input):
+    async def validate(self, brand: str, user_input: dict[str, Any]) -> str | None:
         credentials = {key: user_input[key].strip() for key in ("client_id", "client_secret")}
         if not all(credentials.values()):
             return "invalid_auth"
@@ -45,7 +48,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "rate_limited" if error.status == 429 else "cannot_connect"
         return None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors = {}
         if user_input:
             brand = user_input["brand"]
@@ -61,14 +64,14 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_odometer()
         schema = vol.Schema({
             vol.Required("brand"): SelectSelector(SelectSelectorConfig(
-                options=[{"value": key, "label": name} for key, name in BRANDS.items()],
+                options=[SelectOptionDict(value=key, label=name) for key, name in BRANDS.items()],
                 mode=SelectSelectorMode.DROPDOWN,
             )), **KEY_FIELDS,
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors,
                                     description_placeholders={"pleos_url": PLEOS_URL, "key_guide_url": KEY_GUIDE_URL})
 
-    async def async_step_odometer(self, user_input=None):
+    async def async_step_odometer(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is None and self._vehicles:
             vehicles = {
                 vehicle_id(self._setup_data["account_id"], car["vin"]):
@@ -88,16 +91,18 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(title=title, data=self._setup_data,
                                        options=user_input or {"odometer_km_vehicles": []})
 
-    async def async_step_reauth(self, entry_data):
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(self, user_input=None):
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self.replace_key("reauth_confirm", self._get_reauth_entry(), user_input)
 
-    async def async_step_reconfigure(self, user_input=None):
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self.replace_key("reconfigure", self._get_reconfigure_entry(), user_input)
 
-    async def replace_key(self, step, entry, user_input):
+    async def replace_key(
+        self, step: str, entry: PleosConfigEntry, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
         errors = {}
         if user_input:
             if self.key_configured(entry.data["brand"], user_input["client_id"], entry.entry_id):
@@ -118,7 +123,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: PleosConfigEntry) -> "PleosOptionsFlow":
         return PleosOptionsFlow()
 
-    def key_configured(self, brand, client_id, exclude=None):
+    def key_configured(self, brand: str, client_id: str, exclude: str | None = None) -> bool:
         return any(entry.entry_id != exclude and entry.data.get("brand") == brand
                    and entry.data.get("client_id") == client_id.strip() for entry in self._async_current_entries())
 
@@ -129,24 +134,26 @@ OPTION_SECTIONS = {"polling": ("stale_minutes", "location", "reverse_geocode", "
                    "storage": ("archive",)}
 
 
-def minutes(maximum):
+def minutes(maximum: float) -> NumberSelector:
     return NumberSelector(NumberSelectorConfig(min=5, max=maximum, step=1, mode=NumberSelectorMode.BOX,
                                                unit_of_measurement="min"))
 
 
-def odometer_selector(vehicles):
+def odometer_selector(vehicles: Mapping[str, str]) -> SelectSelector:
     return SelectSelector(SelectSelectorConfig(
-        options=[{"value": car_id, "label": name} for car_id, name in sorted(vehicles.items())],
+        options=[SelectOptionDict(value=car_id, label=name) for car_id, name in sorted(vehicles.items())],
         multiple=True, mode=SelectSelectorMode.DROPDOWN,
     ))
 
 
 class PleosOptionsFlow(config_entries.OptionsFlowWithReload):
-    async def async_step_init(self, user_input=None):
+    config_entry: PleosConfigEntry
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data={
                 key: value for fields in user_input.values() for key, value in fields.items()})
-        options = DEFAULT_OPTIONS | dict(self.config_entry.options)
+        options: dict[str, Any] = DEFAULT_OPTIONS | dict(self.config_entry.options)
         # Retain saved selections when a car is temporarily missing or the entry is unloaded.
         vehicles = {car_id: car_id for car_id in options["odometer_km_vehicles"]}
         for device in dr.async_entries_for_config_entry(dr.async_get(self.hass), self.config_entry.entry_id):

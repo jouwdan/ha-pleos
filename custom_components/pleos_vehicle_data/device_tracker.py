@@ -1,6 +1,6 @@
 """GPS tracking only when the API supplies valid WGS84 coordinates."""
 
-from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.components.device_tracker.entity import TrackerEntity
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -21,13 +21,17 @@ async def async_setup_entry(
 class VehicleTracker(VehicleEntity, TrackerEntity):
     platform_domain = "device_tracker"
     @property
-    def source_type(self):
+    def source_type(self) -> SourceType:
         return SourceType.GPS
 
     @property
-    def latitude(self):
-        return self.car["location"]["latitude"] if self.car and self.car["location"] and reported_age(self.reported_at) is not None else None
+    def latitude(self) -> float | None:
+        car = self.car
+        location = car["location"] if car else None
+        return location["latitude"] if location and reported_age(self.reported_at) is not None else None
 
     @property
-    def longitude(self):
-        return self.car["location"]["longitude"] if self.car and self.car["location"] and reported_age(self.reported_at) is not None else None
+    def longitude(self) -> float | None:
+        car = self.car
+        location = car["location"] if car else None
+        return location["longitude"] if location and reported_age(self.reported_at) is not None else None

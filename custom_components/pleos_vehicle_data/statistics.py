@@ -15,46 +15,73 @@ and every hour from the earliest changed one onwards is imported again so sums s
 
 import logging
 from datetime import datetime, timezone
+from typing import Literal, TypedDict, cast
 
-from homeassistant.components.recorder import get_instance
-from homeassistant.components.recorder.models import StatisticMeanType
+from homeassistant.helpers.recorder import get_instance
+from homeassistant.components.recorder.models import StatisticData, StatisticMeanType
+from homeassistant.core import HomeAssistant
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, TRIP_MEMORY_DAYS
 from .data import finite_number, reported_age, trip_readings
+from .models import Trip
 
 LOGGER = logging.getLogger(__name__)
 MPH_TO_KMH = 1.609344
-STATISTICS = {
+STATISTICS: dict[str, tuple[str, str, str, StatisticMeanType]] = {
     "distance": ("Distance driven", "km", "distance", StatisticMeanType.NONE),
     "driving_time": ("Driving time", "min", "duration", StatisticMeanType.NONE),
     "speed": ("Speed while driving", "km/h", "speed", StatisticMeanType.ARITHMETIC),
 }
 
 
-def statistics_store(hass, entry_id):
+class TripMetrics(TypedDict, total=False):
+    km: float
+    minutes: float
+    speed_n: float
+    speed_sum: float
+    speed_min: float
+    speed_max: float
+
+
+class TripShare(TripMetrics):
+    hour: str
+
+
+class StatisticsLedger(TypedDict):
+    trips: dict[str, dict[str, TripShare]]
+    hours: dict[str, dict[str, TripMetrics]]
+    pending: dict[str, str]
+
+
+type MetricKey = Literal["km", "minutes", "speed_n", "speed_sum", "speed_min", "speed_max"]
+SUM_FIELDS: tuple[MetricKey, ...] = ("km", "minutes", "speed_n", "speed_sum")
+SPEED_FIELDS: tuple[MetricKey, ...] = ("speed_min", "speed_max", "speed_n", "speed_sum")
+
+
+def statistics_store(hass: HomeAssistant, entry_id: str) -> Store[StatisticsLedger]:
     return Store(hass, 1, f"{DOMAIN}.{entry_id}.statistics")
 
 
-def statistic_id(car_id, kind):
+def statistic_id(car_id: str, kind: str) -> str:
     return f"{DOMAIN}:{car_id}_{kind}"
 
 
-def _hour(start):
+def _hour(start: str) -> str:
     stamp = datetime.fromisoformat(start.replace("Z", "+00:00")).astimezone(timezone.utc)
     return stamp.replace(minute=0, second=0, microsecond=0).isoformat()
 
 
-def trip_share(endpoint, trip):
+def trip_share(endpoint: str, trip: Trip) -> TripShare | None:
     """What one trip adds to its hour, or None when it adds nothing."""
     current, start = trip_readings(endpoint, {"trips": [trip]})
     if start is None:
         return None
-    share = {}
+    share: TripMetrics = {}
     if endpoint == "driving/data":
         if "driving_data_trip_distance" in current:
-            share["km"] = current["driving_data_trip_distance"]["value"]
+            share["km"] = cast(float, current["driving_data_trip_distance"]["value"])
         length = trip.get("tripLength")
         if finite_number(length) and length >= 0:
             share["minutes"] = length / 60000
@@ -69,36 +96,38 @@ def trip_share(endpoint, trip):
 
 
 class TripStatistics:
-    def __init__(self, hass, entry_id):
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self.hass = hass
         self.store = statistics_store(hass, entry_id)
         # {"trips": {car: {"<endpoint>|<start>": share}}, "hours": {car: {hour: totals}},
         #  "pending": {car: earliest hour not yet imported}}
-        self.ledger = None
-        self.names = {}
+        self.ledger: StatisticsLedger | None = None
+        self.names: dict[str, str] = {}
 
-    async def load(self):
+    async def load(self) -> None:
         if self.ledger is None:
             stored = await self.store.async_load()
-            self.ledger = stored if isinstance(stored, dict) else {}
-            for key in ("trips", "hours", "pending"):
+            self.ledger = cast(StatisticsLedger, stored if isinstance(stored, dict) else {})
+            keys: tuple[Literal["trips", "hours", "pending"], ...] = ("trips", "hours", "pending")
+            for key in keys:
                 self.ledger.setdefault(key, {})
 
-    def add(self, car_id, endpoint, trip, name):
+    def add(self, car_id: str, endpoint: str, trip: Trip, name: str) -> bool:
         """Account for one returned trip; returns True when an hour changed."""
+        ledger = cast(StatisticsLedger, self.ledger)
         self.names[car_id] = name
         share = trip_share(endpoint, trip)
-        trips = self.ledger["trips"].setdefault(car_id, {})
+        trips = ledger["trips"].setdefault(car_id, {})
         key = f"{endpoint}|{trip['triggerStartTime']}"
         old = trips.get(key)
         if old == share:
             return False
-        hours = self.ledger["hours"].setdefault(car_id, {})
+        hours = ledger["hours"].setdefault(car_id, {})
         for part, sign in ((old, -1), (share, 1)):
             if not part:
                 continue
             totals = hours.setdefault(part["hour"], {})
-            for field in ("km", "minutes", "speed_n", "speed_sum"):
+            for field in SUM_FIELDS:
                 if field in part:
                     totals[field] = totals.get(field, 0) + sign * part[field]
             self._mark_pending(car_id, part["hour"])
@@ -111,37 +140,41 @@ class TripStatistics:
             self._rebuild_extremes(car_id, hour)
         return True
 
-    def _mark_pending(self, car_id, hour):
-        pending = self.ledger["pending"].get(car_id)
-        self.ledger["pending"][car_id] = min(pending, hour) if pending else hour
+    def _mark_pending(self, car_id: str, hour: str) -> None:
+        ledger = cast(StatisticsLedger, self.ledger)
+        pending = ledger["pending"].get(car_id)
+        ledger["pending"][car_id] = min(pending, hour) if pending else hour
 
-    def _rebuild_extremes(self, car_id, hour):
-        totals = self.ledger["hours"][car_id][hour]
-        shares = [share for share in self.ledger["trips"][car_id].values()
+    def _rebuild_extremes(self, car_id: str, hour: str) -> None:
+        ledger = cast(StatisticsLedger, self.ledger)
+        totals = ledger["hours"][car_id][hour]
+        shares = [share for share in ledger["trips"][car_id].values()
                   if share["hour"] == hour and "speed_min" in share]
         if shares:
             totals["speed_min"] = min(share["speed_min"] for share in shares)
             totals["speed_max"] = max(share["speed_max"] for share in shares)
         else:
-            for field in ("speed_min", "speed_max", "speed_n", "speed_sum"):
+            for field in SPEED_FIELDS:
                 totals.pop(field, None)
 
-    async def flush(self, changed):
+    async def flush(self, changed: bool) -> None:
         """Import every hour from the earliest changed one, then save the ledger if anything changed."""
-        if "recorder" in self.hass.config.components and self.ledger["pending"]:
+        ledger = cast(StatisticsLedger, self.ledger)
+        if "recorder" in self.hass.config.components and ledger["pending"]:
             # Without the recorder, hours stay pending and are imported once it is available.
-            for car_id, since in list(self.ledger["pending"].items()):
+            for car_id, since in list(ledger["pending"].items()):
                 self._import(car_id, since)
-                del self.ledger["pending"][car_id]
+                del ledger["pending"][car_id]
             changed = True
         if self._prune() or changed:
-            await self.store.async_save(self.ledger)
+            await self.store.async_save(ledger)
 
-    def _import(self, car_id, since):
+    def _import(self, car_id: str, since: str) -> None:
+        ledger = cast(StatisticsLedger, self.ledger)
         name = self.names.get(car_id, car_id)
-        rows = {"distance": [], "driving_time": [], "speed": []}
+        rows: dict[str, list[StatisticData]] = {"distance": [], "driving_time": [], "speed": []}
         totals = {"km": 0.0, "minutes": 0.0}
-        for hour, values in sorted(self.ledger["hours"].get(car_id, {}).items()):
+        for hour, values in sorted(ledger["hours"].get(car_id, {}).items()):
             totals["km"] += values.get("km", 0)
             totals["minutes"] += values.get("minutes", 0)
             if hour < since:
@@ -160,21 +193,22 @@ class TripStatistics:
                     "has_sum": mean_type is StatisticMeanType.NONE,
                 }, rows[kind])
 
-    def _prune(self):
+    def _prune(self) -> bool:
+        ledger = cast(StatisticsLedger, self.ledger)
         # Trips older than any query reaches back cannot change any more; their hours stay.
         limit = TRIP_MEMORY_DAYS * 86400
         pruned = False
-        for trips in self.ledger["trips"].values():
+        for trips in ledger["trips"].values():
             for key in [key for key in trips if (age := reported_age(key.split("|", 1)[1])) is None or age > limit]:
                 del trips[key]
                 pruned = True
         return pruned
 
     @staticmethod
-    async def async_clear(hass, entry_id):
+    async def async_clear(hass: HomeAssistant, entry_id: str) -> None:
         """Remove the ledger and the statistics it imported."""
         store = statistics_store(hass, entry_id)
-        ledger = await store.async_load() or {}
+        ledger = cast(StatisticsLedger, await store.async_load() or {})
         cars = set(ledger.get("hours", {})) | set(ledger.get("trips", {}))
         if cars and "recorder" in hass.config.components:
             get_instance(hass).async_clear_statistics(

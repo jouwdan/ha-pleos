@@ -38,6 +38,7 @@ jobs:
         run: |
           docker run --rm --entrypoint sh \
             -e COVERAGE_FILE=/tmp/.coverage \
+            -e MYPYPATH=/usr/src/homeassistant \
             -e TEST_REQUIREMENTS=${{ matrix.requirements }} \
             -v "$GITHUB_WORKSPACE:/src:ro" -w /src \
             ghcr.io/home-assistant/home-assistant:${{ matrix.homeassistant }} \
@@ -45,6 +46,7 @@ jobs:
             python -m pip install -r "$TEST_REQUIREMENTS"
             python -c "import json, subprocess, sys; subprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"--no-cache-dir\", \"--index-url\", \"https://pypi.org/simple\", *json.load(open(\"custom_components/pleos_vehicle_data/manifest.json\"))[\"requirements\"]], check=True)"
             python -m ruff check --no-cache .
+            python -m mypy --cache-dir=/tmp/mypy-cache
             python -m coverage run -m pytest -q -p no:cacheprovider
             python -m coverage report
             python -m coverage report --include="*/config_flow.py" --fail-under=100

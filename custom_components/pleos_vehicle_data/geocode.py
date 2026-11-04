@@ -3,8 +3,13 @@
 import logging
 import time
 from urllib.parse import urlparse
+from typing import TypedDict
+
+from aiohttp import ClientSession
 
 from nominatim_reverse_client import GeocodingError, NominatimClient, reverse_url
+
+from .models import LocationPoint, Reading, VehicleState
 
 LOGGER = logging.getLogger(__name__)
 USER_AGENT = "HomeAssistant-PleosVehicleData (https://github.com/jouwdan/ha-pleos)"
@@ -12,29 +17,37 @@ CACHE_TTL_SECONDS = 48 * 60 * 60
 MAX_CACHE_ENTRIES = 256
 
 
+class CachedAddress(TypedDict):
+    """A successful provider response and its cache time."""
+
+    address: str
+    cached_at: float
+    attribution: str | None
+
+
 class ReverseGeocoder:
     """Resolve WGS84 vehicle coordinates using a user-selected service."""
 
-    def __init__(self, session, service_url="", api_key=""):
+    def __init__(self, session: ClientSession, service_url: str = "", api_key: object = "") -> None:
         self.session = session
         self.service_url = self._reverse_url(service_url)
         self.api_key = api_key.strip() if isinstance(api_key, str) else ""
         self.client = NominatimClient(session, self.service_url, user_agent=USER_AGENT, api_key=self.api_key)
-        self.cache = {}
-        self.last_status = None
-        self.last_attribution = None
+        self.cache: dict[tuple[float, float], CachedAddress] = {}
+        self.last_status: str | None = None
+        self.last_attribution: str | None = None
 
     _reverse_url = staticmethod(reverse_url)
 
     @staticmethod
-    def cache_key(point):
+    def cache_key(point: LocationPoint) -> tuple[float, float]:
         return round(point["latitude"], 4), round(point["longitude"], 4)
 
-    async def apply(self, car):
+    async def apply(self, car: VehicleState) -> None:
         now = time.monotonic()
         self.cache = {key: cached for key, cached in self.cache.items()
                       if now - cached["cached_at"] < CACHE_TTL_SECONDS}
-        reading = {
+        reading: Reading = {
             "name": "Address", "value": None, "domain": "sensor", "source": "locations",
             "attributes": {"geocoder": urlparse(self.service_url).hostname if self.service_url else None},
         }
@@ -68,7 +81,7 @@ class ReverseGeocoder:
         else:
             reading["attributes"]["geocoding_status"] = self.last_status or "lookup_failed"
 
-    async def _lookup(self, latitude, longitude):
+    async def _lookup(self, latitude: float, longitude: float) -> str | None:
         self.last_status = None
         self.last_attribution = None
         try:

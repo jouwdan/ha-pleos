@@ -22,7 +22,7 @@ DISABLED_DIAGNOSTICS = frozenset(
 )
 
 
-def _sensor_names():
+def _sensor_names() -> dict[str, str]:
     names = {key: name for key, name in NAMES.items() if key not in BINARY_KEYS}
     names["connection"] = "Connection"
     names["last_successful_poll"] = "Last successful poll"

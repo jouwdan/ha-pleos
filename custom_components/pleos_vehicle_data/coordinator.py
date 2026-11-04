@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
@@ -22,6 +22,7 @@ from .ranges import RANGE_PREFIX, TYRE_PREFIX, RangeCache
 from .geocode import ReverseGeocoder
 from .statistics import TripStatistics
 from .trips import TripTracker
+from .models import CoordinatorData, Options, Reading, Trip, VehicleState
 
 if TYPE_CHECKING:
     from .models import PleosConfigEntry
@@ -34,39 +35,39 @@ NAMED_VEHICLE_FIELDS = ("vin", "nickname", "name", "sellname", "type")
 SKIPPED = object()
 
 
-class PleosCoordinator(DataUpdateCoordinator):
+class PleosCoordinator(DataUpdateCoordinator[CoordinatorData]):
     config_entry: PleosConfigEntry
 
     def __init__(self, hass: HomeAssistant, entry: PleosConfigEntry, client: PleosClient) -> None:
         self.client = client
-        self.brand = entry.data["brand"]
+        self.brand = cast(str, entry.data["brand"])
         self.account_id = account_id(entry)
         self.account_name = entry.title
-        self.options = DEFAULT_OPTIONS | dict(entry.options)
+        self.options = cast(Options, DEFAULT_OPTIONS | dict(entry.options))
         super().__init__(hass, LOGGER, config_entry=entry, name=BRANDS[self.brand],
                          update_interval=timedelta(minutes=SNAPSHOT_POLL_MINUTES))
         self.trips = TripTracker(hass, entry.entry_id, TRIP_POLL_MINUTES)
         self.archive = ResponseArchive(hass, entry.entry_id, self.account_id) if self.options["archive"] else None
         # Trips waiting to be fired on each car's Trip event entity: {car_id: [(event_type, attributes)]}.
-        self.trip_queue = {}
-        self.new_trips = []  # [(car_id, endpoint, trip)] found in the running poll.
+        self.trip_queue: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        self.new_trips: list[tuple[str, str, Trip]] = []  # [(car_id, endpoint, trip)] found in the running poll.
         self.statistics = TripStatistics(hass, entry.entry_id)
-        self.fetched_trips = []  # [(car_id, endpoint, data)] returned in the running poll.
+        self.fetched_trips: list[tuple[str, str, object]] = []  # [(car_id, endpoint, data)] returned in the running poll.
         self.ranges = RangeCache(hass, entry.entry_id)
         self.economy = EVEconomy(hass, entry.entry_id)
         self.geocoder = ReverseGeocoder(
             client.session, self.options["geocoder_url"], self.options["geocoder_key"]
         )
-        self.last_successful_poll = None
+        self.last_successful_poll: datetime | None = None
         self.using_last_data = False
         self._refresh_waiters: set[asyncio.Future[bool]] = set()
-        self._poll_tasks: set[asyncio.Task] = set()
+        self._poll_tasks: set[asyncio.Task[object]] = set()
 
     async def async_refresh_for_service(self) -> None:
         """Wait for the next completed poll, including a poll already in progress."""
         if self._shutdown_requested:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="refresh_cancelled")
-        completed = self.hass.loop.create_future()
+        completed: asyncio.Future[bool] = self.hass.loop.create_future()
         self._refresh_waiters.add(completed)
         try:
             try:
@@ -98,8 +99,9 @@ class PleosCoordinator(DataUpdateCoordinator):
             if not completed.done():
                 completed.set_result(False)
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> CoordinatorData:
         task = asyncio.current_task()
+        assert task is not None
         self._poll_tasks.add(task)
         can_keep_data = self.last_update_success or self.using_last_data
         self.using_last_data = False
@@ -111,9 +113,9 @@ class PleosCoordinator(DataUpdateCoordinator):
             await self.trips.load_fired()
             await self.statistics.load()
             self.new_trips, self.fetched_trips = [], []
-            result = {"status": "connected" if vehicles else "no_vehicles", "cars": {}}
-            pending = []
-            trip_cache = {}
+            result: CoordinatorData = {"status": "connected" if vehicles else "no_vehicles", "cars": {}}
+            pending: list[tuple[str, str, Trip]] = []
+            trip_cache: dict[str, VehicleState] = {}
             now = datetime.now(timezone.utc)
             if self.archive:
                 await self.archive.load()
@@ -157,7 +159,7 @@ class PleosCoordinator(DataUpdateCoordinator):
             self._poll_tasks.discard(task)
 
     @callback
-    def _async_refresh_finished(self):
+    def _async_refresh_finished(self) -> None:
         super()._async_refresh_finished()
         success = self.last_update_success and all(
             car["readings"][identifier(endpoint) + "_api"]["value"] != "error"
@@ -168,8 +170,11 @@ class PleosCoordinator(DataUpdateCoordinator):
             if not completed.done():
                 completed.set_result(success)
 
-    async def _update_car(self, car_id, vehicle, result, pending, now):
-        car = {"vehicle": vehicle, "readings": {"vehicle_information": self._vehicle_information(vehicle)},
+    async def _update_car(
+        self, car_id: str, vehicle: dict[str, Any], result: CoordinatorData,
+        pending: list[tuple[str, str, Trip]], now: datetime,
+    ) -> VehicleState:
+        car: VehicleState = {"vehicle": vehicle, "readings": {"vehicle_information": self._vehicle_information(vehicle)},
                "sources": {}, "location": None}
         fetch_trips = self.trips.due(car_id, now)
         for endpoint in ENDPOINTS:
@@ -198,9 +203,9 @@ class PleosCoordinator(DataUpdateCoordinator):
                 alternate["entity_category"] = "diagnostic"
         return car
 
-    def _retain_measurements(self, car_id, car):
-        previous = (self.data or {}).get("cars", {}).get(car_id, {})
-        for key, reading in previous.get("readings", {}).items():
+    def _retain_measurements(self, car_id: str, car: VehicleState) -> None:
+        previous = self.data["cars"].get(car_id) if self.data else None
+        for key, reading in (previous["readings"].items() if previous else ()):
             endpoint = reading["source"]
             if (endpoint not in SNAPSHOT_ENDPOINTS or endpoint == "locations" or key.startswith((RANGE_PREFIX, TYRE_PREFIX))
                     or reading["domain"] != "sensor" or not finite_number(reading["value"])
@@ -213,13 +218,13 @@ class PleosCoordinator(DataUpdateCoordinator):
             if source["value"] != "error" or not (status in (0, 429) or 500 <= status < 600):
                 continue
             attrs = reading.get("attributes", {})
-            stamp = attrs.get("reported_at", previous["sources"].get(endpoint))
+            stamp = attrs.get("reported_at", previous["sources"].get(endpoint) if previous else None)
             if reported_age(stamp) is not None:
                 car["readings"][key] = reading | {"attributes": attrs | {
                     "reported_at": stamp, "last_known": True, "data_stale": True,
                 }}
 
-    def _vehicle_information(self, vehicle):
+    def _vehicle_information(self, vehicle: dict[str, Any]) -> Reading:
         attributes = {"vin": vehicle["vin"], "nickname": vehicle.get("nickname"),
                       "model_code": vehicle.get("name"), "model": vehicle.get("sellname"),
                       "api_metadata": self.client.vehicles_metadata}
@@ -231,13 +236,16 @@ class PleosCoordinator(DataUpdateCoordinator):
                 "entity_category": "diagnostic", "source": "vehicles", "attributes": attributes}
 
     @staticmethod
-    def _diagnostic_source(endpoint, now):
+    def _diagnostic_source(endpoint: str, now: datetime) -> Reading:
         return {"name": ENDPOINT_NAMES[endpoint] + " API", "value": "no_data", "domain": "sensor",
                 "entity_category": "diagnostic", "source": endpoint, "device_class": "enum",
                 "options": ["available", "no_data", "error", "disabled"],
                 "attributes": {"fetched_at": now.isoformat()}}
 
-    async def _fetch(self, car_id, vehicle, endpoint, source, result, now):
+    async def _fetch(
+        self, car_id: str, vehicle: dict[str, Any], endpoint: str, source: Reading,
+        result: CoordinatorData, now: datetime,
+    ) -> object:
         """Query one endpoint, recording the outcome on its diagnostic sensor."""
         if endpoint == "locations" and not self.options["location"]:
             source["value"] = "disabled"
@@ -276,10 +284,9 @@ class PleosCoordinator(DataUpdateCoordinator):
         self._log_endpoint_transition(car_id, endpoint, source)
         return data
 
-    def _log_endpoint_transition(self, car_id, endpoint, source):
-        previous = (self.data or {}).get("cars", {}).get(car_id, {}).get("readings", {}).get(
-            identifier(endpoint) + "_api", {}
-        )
+    def _log_endpoint_transition(self, car_id: str, endpoint: str, source: Reading) -> None:
+        previous_car = self.data["cars"].get(car_id) if self.data else None
+        previous: Reading = previous_car["readings"].get(identifier(endpoint) + "_api", {}) if previous_car else {}
         failed = source["value"] == "error"
         if failed and previous.get("value") != "error":
             LOGGER.warning("Pleos %s for %s is unavailable (HTTP %s, code %s)",
@@ -288,7 +295,10 @@ class PleosCoordinator(DataUpdateCoordinator):
         elif not failed and previous.get("value") == "error":
             LOGGER.info("Pleos %s for %s recovered", endpoint, car_id)
 
-    def _apply_trips(self, car_id, car, endpoint, data, source, pending):
+    def _apply_trips(
+        self, car_id: str, car: VehicleState, endpoint: str, data: object, source: Reading,
+        pending: list[tuple[str, str, Trip]],
+    ) -> None:
         rejections = Rejections(endpoint)
         current, start = trip_readings(endpoint, data, rejections)
         source["attributes"] |= rejections.attributes()
@@ -302,7 +312,7 @@ class PleosCoordinator(DataUpdateCoordinator):
         source["value"] = "available" if isinstance(trips, list) and trips else "no_data"
         source["attributes"]["trip_count"] = len(trips) if isinstance(trips, list) else 0
 
-    async def _queue_trip_events(self):
+    async def _queue_trip_events(self) -> None:
         """Queue every new trip for its car's Trip event entity, oldest first, once the poll succeeded."""
         found, self.new_trips = self.new_trips, []
         order = {endpoint: index for index, endpoint in enumerate(TRIP_ENDPOINTS)}
@@ -312,7 +322,7 @@ class PleosCoordinator(DataUpdateCoordinator):
             self.trip_queue.setdefault(car_id, []).append((identifier(endpoint), trip_summary(endpoint, trip)))
         await self.trips.mark_fired(found)
 
-    async def _update_statistics(self, result):
+    async def _update_statistics(self, result: CoordinatorData) -> None:
         """Place every returned trip in its drive hour, once the poll succeeded."""
         fetched, self.fetched_trips = self.fetched_trips, []
         changed = False
@@ -323,8 +333,11 @@ class PleosCoordinator(DataUpdateCoordinator):
                 changed |= self.statistics.add(car_id, endpoint, trip, name)
         await self.statistics.flush(changed)
 
-    def _apply_snapshot(self, car_id, car, endpoint, data, source):
-        stamp = data.get("timestamp") if isinstance(data, dict) else None
+    def _apply_snapshot(
+        self, car_id: str, car: VehicleState, endpoint: str, data: object, source: Reading,
+    ) -> None:
+        raw_stamp = data.get("timestamp") if isinstance(data, dict) else None
+        stamp = raw_stamp if isinstance(raw_stamp, str) else None
         car["sources"][endpoint] = stamp
         rejections = Rejections(endpoint)
         current = readings(endpoint, data, car["vehicle"].get("type"), rejections)
@@ -344,8 +357,8 @@ class PleosCoordinator(DataUpdateCoordinator):
             return
         prefix = identifier(endpoint)
         for suffix, name, reading in (
-            ("reported_at", " last reported", {"value": stamp, "device_class": "timestamp"}),
-            ("data_age", " data age", {"value": round(age / 60, 1), "unit_of_measurement": "min"}),
+            ("reported_at", " last reported", Reading(value=stamp, device_class="timestamp")),
+            ("data_age", " data age", Reading(value=round(age / 60, 1), unit_of_measurement="min")),
         ):
             car["readings"][prefix + "_" + suffix] = reading | {
                 "name": ENDPOINT_NAMES[endpoint] + name, "domain": "sensor", "source": endpoint,
