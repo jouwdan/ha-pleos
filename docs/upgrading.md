@@ -4,6 +4,16 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Stable release 1.0.0: vehicle evidence and legacy translations
+
+Duplicate-vehicle checks retain account-scoped vehicle hashes from accepted setup and credential replacement. This closes the gap where a new entry's first setup fails before its devices are registered. Successful vehicle-list requests update the saved list; API failures retain it, and a successful empty response clears it. Existing entries acquire the metadata on their next successful request. No account namespace, entity ID, user option or history migration is required.
+
+VIN matching remains a continuity check, not proof of account identity. Replacement credentials with no known vehicle still require the unchecked same-account confirmation introduced in 0.14.0. See [multiple accounts](configuration.md#multiple-accounts).
+
+Existing entities for undocumented API fields now use a translatable **Legacy reading ({field})** label, where `{field}` is the technical field identifier. Their default display names change when the field is returned, but entity IDs, custom names, enabled/disabled and hidden settings, units, labels and other user preferences are preserved. Supported entity names remain unchanged, and new undocumented fields still do not create entities.
+
+This is the first 1.x stable release. The integration aims to meet Home Assistant's Gold quality standards; official tier recognition and the remaining account-identity requirements are tracked in the [quality checklist](quality-scale.md). Restart Home Assistant after updating. Dependency versions and storage formats are unchanged.
+
 ## Account checks and actionable repairs in 0.14.0
 
 Setup and key replacement now reject vehicles already associated with another account entry of the same manufacturer. When replacement credentials have no vehicle in common with the entry's existing devices, an unchecked confirmation asks you to verify that they belong to the same account. This supports legitimate renewal after all vehicles change or an account becomes empty, without silently accepting an unverified account change. Pleos does not document a stable personal-account identifier; these checks provide vehicle continuity and explicit confirmation, not proof of account identity.

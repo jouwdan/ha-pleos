@@ -36,7 +36,7 @@ rules:
   test-before-setup: done
   unique-config-entry:
     status: todo
-    comment: Duplicate keys and vehicle overlap are rejected; empty accounts lack registry evidence and a validated account ID.
+    comment: Duplicate keys and saved/registered vehicle overlap are rejected; empty or completely changed fleets still lack a validated account ID.
 
   # Silver
   action-exceptions: done
@@ -90,9 +90,7 @@ rules:
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
-  entity-translations:
-    status: todo
-    comment: Supported fields are translated; legacy undocumented entities keep generated names for compatibility, pending Core review.
+  entity-translations: done
   exception-translations: done
   icon-translations: done
   reconfiguration-flow:
