@@ -61,6 +61,8 @@ class AccountTests(HomeAssistantTestCase):
                  patch.object(PleosClient, 'vehicles', AsyncMock(return_value=[CAR])), \
                  patch.object(self.hass.config_entries, 'async_schedule_reload'):
                 result = await flow.async_step_reconfigure(replacement)
+                self.assertEqual(result['step_id'], 'confirm_account')
+                result = await flow.async_step_confirm_account({'confirm_same_account': True})
             self.assertEqual(result['reason'], 'reconfigure_successful')
             after = PleosCoordinator(self.hass, current, self.client)
             self.addAsyncCleanup(after.async_shutdown)

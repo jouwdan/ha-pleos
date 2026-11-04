@@ -78,6 +78,9 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(ConnectionSensor(self.coordinator).native_value, "key_required")
 
     async def test_reauth_validates_and_preserves_entry(self):
+        dr.async_get(self.hass).async_get_or_create(
+            config_entry_id=self.entry.entry_id, identifiers={(DOMAIN, vehicle_id("kia", CAR["vin"]))},
+        )
         options = {"odometer_km_vehicles": [vehicle_id("kia", CAR["vin"])]}
         self.hass.config_entries.async_update_entry(self.entry, options=options)
         flow = self.flow("reauth")
@@ -98,6 +101,9 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(self.entry.data, OLD)
 
     async def test_proactive_key_replacement(self):
+        dr.async_get(self.hass).async_get_or_create(
+            config_entry_id=self.entry.entry_id, identifiers={(DOMAIN, vehicle_id("kia", CAR["vin"]))},
+        )
         options = {"odometer_km_vehicles": [vehicle_id("kia", CAR["vin"])]}
         self.hass.config_entries.async_update_entry(self.entry, options=options)
         flow = self.flow("reconfigure")
@@ -106,6 +112,22 @@ class ConfigFlowTests(HomeAssistantTestCase):
         self.assertEqual(result["reason"], "reconfigure_successful")
         self.assertEqual(self.entry.data["client_id"], NEW["client_id"])
         self.assertEqual(self.entry.options, options)
+
+    async def test_changed_replacement_credentials_need_fresh_confirmation(self):
+        flow = self.flow("reconfigure")
+        changed = NEW | {"client_id": "another-fixture-key"}
+        with patch.object(flow, "_get_reconfigure_entry", return_value=self.entry), \
+             patch.object(PleosClient, "vehicles", AsyncMock(return_value=[])), \
+             patch.object(self.hass.config_entries, "async_schedule_reload"):
+            first = await flow.async_step_reconfigure(NEW)
+            self.assertEqual(first["step_id"], "confirm_account")
+            second = await flow.async_step_reconfigure(changed)
+            self.assertEqual(second["step_id"], "confirm_account")
+            self.assertEqual(second["data_schema"]({}), {"confirm_same_account": False})
+            self.assertEqual(self.entry.data, OLD)
+            accepted = await flow.async_step_confirm_account({"confirm_same_account": True})
+        self.assertEqual(accepted["reason"], "reconfigure_successful")
+        self.assertEqual(self.entry.data, OLD | changed)
 
     async def test_user_flow_for_all_brands_and_secret_selector(self):
         with patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])):
