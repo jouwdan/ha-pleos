@@ -118,6 +118,7 @@ class LastSuccessfulPollSensor(CoordinatorEntity, SensorEntity):
     """When this account last completed a poll without request errors."""
 
     _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = "timestamp"
     _attr_translation_key = "last_successful_poll"

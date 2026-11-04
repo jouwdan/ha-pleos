@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect your vehicles",
-        "description": "Get a **personal** API key from [Pleos Playground]({pleos_url}) \u2192 account menu \u2192 **My Vehicle Data API** \u2192 select manufacturer \u2192 **Get API Key** \u2192 sign into your manufacturer account. [Step-by-step guide]({key_guide_url}).\n\nSelect the same manufacturer below and paste both credentials. Keys must be replaced manually when they expire; check the expiry shown in Pleos. Only data shared by your vehicle will appear.",
+        "description": "Get a **personal** API key from [Pleos Playground]({pleos_url}) → account menu → **My Vehicle Data API** → select manufacturer → **Get API Key** → sign into your manufacturer account. [Step-by-step guide]({key_guide_url}).\n\nSelect the same manufacturer below and paste both credentials. Keys must be replaced manually when they expire; check the expiry shown in Pleos. Only data shared by your vehicle will appear.",
         "data": {
           "brand": "Manufacturer",
           "client_id": "Client ID",
@@ -18,7 +18,7 @@
       },
       "odometer": {
         "title": "Odometer",
-        "description": "Home Assistant uses your preferred distance unit (km or miles). Some cars report an odometer value in kilometres but incorrectly label it as miles, making the displayed distance about 1.61 times too high.\n\nSelect only cars with this confirmed problem. If unsure, leave the selection empty and compare the odometer with your dashboard after setup. You can change this later under **Configure \u2192 Vehicle status**.",
+        "description": "Home Assistant uses your preferred distance unit (km or miles). Some cars report an odometer value in kilometres but incorrectly label it as miles, making the displayed distance about 1.61 times too high.\n\nSelect only cars with this confirmed problem. If unsure, leave the selection empty and compare the odometer with your dashboard after setup. You can change this later under **Configure → Vehicle status**.",
         "data": {
           "odometer_km_vehicles": "Correct odometer kilometres labelled as miles"
         },
@@ -28,7 +28,7 @@
       },
       "reauth_confirm": {
         "title": "Replace your {brand} API key",
-        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) \u2192 My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
+        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"
@@ -40,7 +40,7 @@
       },
       "reconfigure": {
         "title": "Update your {brand} API key",
-        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) \u2192 My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
+        "description": "Generate a new {brand} personal API key in [Pleos Playground]({pleos_url}) → My Vehicle Data API, then paste both new fields below. Personal keys require manual renewal when they expire. Your existing devices and entity IDs will be kept for the same cars.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"
@@ -119,7 +119,13 @@
         }
       },
       "batteries_api": {
-        "name": "Battery charging API"
+        "name": "Battery charging API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "batteries_charge_batterycapacity": {
         "name": "Battery capacity"
@@ -166,7 +172,13 @@
         }
       },
       "driving_api": {
-        "name": "Driving status API"
+        "name": "Driving status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "driving_data_acceleration_longitudinal": {
         "name": "Forward acceleration (last trip)"
@@ -178,7 +190,13 @@
         "name": "Turning rate (last trip)"
       },
       "driving_data_api": {
-        "name": "Driving trips API"
+        "name": "Driving trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "driving_data_isla_optionusm": {
         "name": "Speed limit assist setting (last trip)",
@@ -247,7 +265,13 @@
         "name": "Driving status last reported"
       },
       "freezer_api": {
-        "name": "Freezer status API"
+        "name": "Freezer status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "freezer_data_age": {
         "name": "Freezer status data age"
@@ -262,7 +286,13 @@
         "name": "Last successful poll"
       },
       "locations_api": {
-        "name": "Location API"
+        "name": "Location API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "locations_data_age": {
         "name": "Location data age"
@@ -289,7 +319,13 @@
         "name": "Location last reported"
       },
       "powertrains_api": {
-        "name": "Powertrain status API"
+        "name": "Powertrain status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "powertrains_batteries_main_remainratio": {
         "name": "Traction battery level"
@@ -298,7 +334,13 @@
         "name": "Powertrain status data age"
       },
       "powertrains_data_api": {
-        "name": "Powertrain trips API"
+        "name": "Powertrain trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "powertrains_data_batteries_hv_voltage": {
         "name": "Traction battery voltage (last trip)"
@@ -337,7 +379,13 @@
         "name": "Powertrain status last reported"
       },
       "speed_api": {
-        "name": "Speed trips API"
+        "name": "Speed trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "speed_location_speed": {
         "name": "Speed (last trip)"
@@ -368,7 +416,13 @@
         "name": "Rear right wheel speed (last trip)"
       },
       "status_api": {
-        "name": "Vehicle status API"
+        "name": "Vehicle status API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "status_climatecontrol_mode": {
         "name": "Climate mode",
@@ -401,7 +455,13 @@
         "name": "Vehicle status data age"
       },
       "status_data_api": {
-        "name": "Vehicle status trips API"
+        "name": "Vehicle status trips API",
+        "state": {
+          "available": "Available",
+          "no_data": "No data",
+          "error": "Error",
+          "disabled": "Disabled"
+        }
       },
       "status_data_lamp_setting": {
         "name": "Exterior light setting (last trip)",
@@ -574,6 +634,21 @@
       },
       "location_address": {
         "name": "Address"
+      },
+      "powertrains_distancetoempties_ev_numbered": {
+        "name": "EV range {index}"
+      },
+      "powertrains_distancetoempties_fcev_numbered": {
+        "name": "Hydrogen range {index}"
+      },
+      "powertrains_distancetoempties_hev_numbered": {
+        "name": "Hybrid range {index}"
+      },
+      "powertrains_distancetoempties_ice_numbered": {
+        "name": "Fuel range {index}"
+      },
+      "powertrains_distancetoempties_phev_numbered": {
+        "name": "Plug-in hybrid range {index}"
       }
     },
     "binary_sensor": {

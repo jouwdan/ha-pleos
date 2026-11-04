@@ -1,17 +1,19 @@
 """Shared vehicle identity and dynamic discovery."""
 
 from homeassistant.const import EntityCategory
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import BRANDS, DOMAIN
 from .data import identifier, reported_age
 from .economy import ECONOMY_KEY
-from .names import ENTITY_NAMES
+from .names import DISABLED_DIAGNOSTICS, ENTITY_NAMES, NUMBERED_RANGE_NAMES, entity_translation_key
 
 
 def discover(entry, async_add_entities, domain, factory):
     coordinator = entry.runtime_data
+    registry = entity_registry.async_get(coordinator.hass)
     seen = set()
 
     def add_new():
@@ -20,6 +22,11 @@ def discover(entry, async_add_entities, domain, factory):
             items = {"location": {"name": "Location", "source": "locations"}} if domain == "device_tracker" and car["location"] else car["readings"] if domain != "device_tracker" else {}
             for key, spec in items.items():
                 if (domain == "device_tracker" or spec["domain"] == domain) and (car_id, key) not in seen:
+                    if entity_translation_key(domain, key) is None:
+                        registered_id = registry.async_get_entity_id(domain, DOMAIN, car_id + "_" + key)
+                        registered = registry.async_get(registered_id) if registered_id else None
+                        if registered is None or registered.config_entry_id != entry.entry_id:
+                            continue
                     seen.add((car_id, key))
                     entities.append(factory(coordinator, car_id, key, spec))
         if entities:
@@ -37,8 +44,10 @@ class VehicleEntity(CoordinatorEntity):
         super().__init__(coordinator)
         self.car_id, self.key, self.spec = car_id, key, spec
         self._attr_unique_id = car_id + "_" + key
-        if key in ENTITY_NAMES[self.platform_domain]:
-            self._attr_translation_key = key
+        if translation_key := entity_translation_key(self.platform_domain, key):
+            self._attr_translation_key = translation_key
+            if translation_key in NUMBERED_RANGE_NAMES:
+                self._attr_translation_placeholders = {"index": key.rsplit("_", 1)[1]}
         else:
             # Undocumented fields keep the English name generated from their path.
             self._attr_name = spec["name"]
@@ -49,6 +58,8 @@ class VehicleEntity(CoordinatorEntity):
             manufacturer=BRANDS[coordinator.brand], model=vehicle.get("sellname") or vehicle.get("name") or "Vehicle",
         )
         self._attr_entity_category = EntityCategory(spec["entity_category"]) if spec.get("entity_category") else None
+        # HA applies this only to first registration; existing registry choices win.
+        self._attr_entity_registry_enabled_default = key not in DISABLED_DIAGNOSTICS
 
     @property
     def suggested_object_id(self):
