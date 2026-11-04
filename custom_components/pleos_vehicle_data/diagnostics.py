@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from .coordinator import PleosCoordinator
 
 # Credentials, the VIN, the user's own vehicle name and precise coordinates.
-TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken", "geocoder_key", "geocoder_url", "full_address"}
+TO_REDACT = {"client_id", "client_secret", "clientId", "clientSecret", "vin", "nickname", "latitude", "longitude", "accessToken", "geocoder_key", "geocoder_url", "full_address", "known_vehicle_ids"}
 
 
 def scrub(value: dict[str, Any], secrets: Sequence[str]) -> dict[str, Any]:

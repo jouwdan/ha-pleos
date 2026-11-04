@@ -43,7 +43,8 @@ async def test_setup_migrates_only_polling_options(
     assert (entry.version, entry.minor_version) == (1, 2)
     assert entry.entry_id == original_entry_id
     assert entry.unique_id == "fixture-identity"
-    assert entry.data == data
+    # The successful first poll learns vehicle evidence without altering existing data.
+    assert entry.data == data | {"known_vehicle_ids": []}
     assert entry.options == preferences
     assert entry.runtime_data.update_interval == timedelta(minutes=15)
     assert entry.runtime_data.trips.interval == timedelta(minutes=60)

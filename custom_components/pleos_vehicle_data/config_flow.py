@@ -18,7 +18,7 @@ from homeassistant.helpers.selector import (
     TextSelector, TextSelectorConfig, TextSelectorType,
 )
 
-from .account import account_id, credential_id, has_known_vehicle
+from .account import account_id, credential_id, has_known_vehicle, vehicle_ids
 from pleos_client import ApiError, AuthError, PleosClient
 from .const import BRANDS, DEFAULT_OPTIONS, DOMAIN
 from .models import PleosConfigEntry
@@ -36,6 +36,7 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 2
     _validated_vehicles: frozenset[str] = frozenset()
+    _setup_data: dict[str, Any]
     _replacement_entry: PleosConfigEntry
     _replacement_data: dict[str, str]
     _previous_credentials: tuple[str, str]
@@ -68,6 +69,9 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self._setup_data = {key: value.strip() for key, value in user_input.items()}
                 self._setup_data["account_id"] = brand + "_" + uuid4().hex
+                self._setup_data["known_vehicle_ids"] = vehicle_ids(
+                    self._setup_data["account_id"], (car["vin"] for car in self._vehicles),
+                )
                 return await self.async_step_odometer()
         schema = vol.Schema({
             vol.Required("brand"): SelectSelector(SelectSelectorConfig(
@@ -154,7 +158,9 @@ class PleosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason=reason)
         return self.async_update_reload_and_abort(
             entry, unique_id=credential_id(entry.data["brand"], self._replacement_data["client_id"]),
-            data_updates=self._replacement_data,
+            data_updates=self._replacement_data | {
+                "known_vehicle_ids": vehicle_ids(account_id(entry), (car["vin"] for car in self._vehicles)),
+            },
         )
 
     @staticmethod

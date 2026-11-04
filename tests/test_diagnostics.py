@@ -41,6 +41,8 @@ class DiagnosticsTests(HomeAssistantTestCase):
         for secret in (VIN, OLD["client_id"], OLD["client_secret"], "Family van", "48.137", "11.575"):
             self.assertNotIn(secret, text)
         self.assertEqual(diagnostics["entry"]["data"]["brand"], "kia")
+        self.assertEqual(diagnostics["entry"]["data"]["known_vehicle_ids"], "**REDACTED**")
+        self.assertEqual(self.entry.data["known_vehicle_ids"], [vehicle_id("kia", VIN)])
         self.assertEqual(diagnostics["coordinator"]["status"], "connected")
         self.assertIn("max_query_days", diagnostics["trips"])
         self.assertEqual(diagnostics["archive"]["enabled"], True)

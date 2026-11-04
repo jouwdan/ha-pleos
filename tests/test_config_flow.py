@@ -87,7 +87,7 @@ class ConfigFlowTests(HomeAssistantTestCase):
         with patch.object(flow, "_get_reauth_entry", return_value=self.entry), patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])), patch.object(self.hass.config_entries, "async_schedule_reload") as reload:
             result = await flow.async_step_reauth_confirm(NEW)
         self.assertEqual(result["reason"], "reauth_successful")
-        self.assertEqual(self.entry.data, OLD | NEW)
+        self.assertEqual(self.entry.data, OLD | NEW | {"known_vehicle_ids": [vehicle_id("kia", CAR["vin"])]})
         self.assertEqual(self.entry.unique_id, credential_id("kia", NEW["client_id"]))
         self.assertEqual(account_id(self.entry), "kia")
         self.assertEqual(self.entry.options, options)
@@ -127,7 +127,7 @@ class ConfigFlowTests(HomeAssistantTestCase):
             self.assertEqual(self.entry.data, OLD)
             accepted = await flow.async_step_confirm_account({"confirm_same_account": True})
         self.assertEqual(accepted["reason"], "reconfigure_successful")
-        self.assertEqual(self.entry.data, OLD | changed)
+        self.assertEqual(self.entry.data, OLD | changed | {"known_vehicle_ids": []})
 
     async def test_user_flow_for_all_brands_and_secret_selector(self):
         with patch.object(PleosClient, "vehicles", AsyncMock(return_value=[CAR])):

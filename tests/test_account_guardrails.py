@@ -10,7 +10,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.pleos_vehicle_data.account import account_id, credential_id
+from custom_components.pleos_vehicle_data.account import account_id, credential_id, vehicle_ids
 from custom_components.pleos_vehicle_data.const import DOMAIN
 from custom_components.pleos_vehicle_data.data import vehicle_id
 from support import CAR, NEW, OLD
@@ -99,13 +99,26 @@ async def test_setup_overlap_is_blocked_while_first_entry_waits_for_devices(
         second = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}, data=NEW | {"brand": "kia"},
         )
-        assert second["reason"] == "already_in_progress"
+        assert second["reason"] == "vehicle_already_configured"
     finally:
         release_setup.set()
         result = await creating
+    await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["result"].unique_id == credential_id("kia", OLD["client_id"])
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+
+
+async def test_overlap_is_blocked_while_another_setup_waits_for_calibration(
+    hass: HomeAssistant, pleos_api: dict[str, AsyncMock],
+) -> None:
+    first = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER}, data=OLD)
+    assert first["step_id"] == "odometer"
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data=NEW | {"brand": "kia"},
+    )
+    assert second["reason"] == "already_in_progress"
+    assert not hass.config_entries.async_entries(DOMAIN)
 
 
 @pytest.mark.parametrize("source", [SOURCE_REAUTH, SOURCE_RECONFIGURE])
@@ -133,6 +146,9 @@ async def test_no_overlap_replacement_requires_explicit_confirmation(
     device_registry: dr.DeviceRegistry, source: str, vehicles: list[dict],
 ) -> None:
     add_vehicle(device_registry, pleos_entry)
+    hass.config_entries.async_update_entry(pleos_entry, data=dict(pleos_entry.data) | {
+        "known_vehicle_ids": vehicle_ids(account_id(pleos_entry), [CAR["vin"]]),
+    })
     original, options = dict(pleos_entry.data), dict(pleos_entry.options)
     pleos_api["vehicles"].return_value = vehicles
     result = await hass.config_entries.flow.async_init(
@@ -149,7 +165,9 @@ async def test_no_overlap_replacement_requires_explicit_confirmation(
     with patch.object(hass.config_entries, "async_schedule_reload") as reload:
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"confirm_same_account": True})
     assert result["reason"] == f"{source}_successful"
-    assert pleos_entry.data == original | NEW
+    assert pleos_entry.data == original | NEW | {
+        "known_vehicle_ids": vehicle_ids(account_id(pleos_entry), (car["vin"] for car in vehicles)),
+    }
     assert pleos_entry.options == options
     assert pleos_entry.unique_id == credential_id("kia", NEW["client_id"])
     reload.assert_called_once_with(pleos_entry.entry_id)

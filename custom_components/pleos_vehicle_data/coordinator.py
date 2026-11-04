@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .account import account_id
+from .account import account_id, vehicle_ids
 from pleos_client import ApiError, AuthError, PleosClient
 from .archive import ResponseArchive
 from .const import (BRANDS, DEFAULT_OPTIONS, DOMAIN, ENDPOINTS, ENDPOINT_NAMES, SNAPSHOT_ENDPOINTS,
@@ -40,6 +40,7 @@ class PleosCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
     def __init__(self, hass: HomeAssistant, entry: PleosConfigEntry, client: PleosClient) -> None:
         self.client = client
+        self._credentials = (client.credentials["clientId"], client.credentials["clientSecret"])
         self.brand = cast(str, entry.data["brand"])
         self.account_id = account_id(entry)
         self.account_name = entry.title
@@ -107,6 +108,12 @@ class PleosCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self.using_last_data = False
         try:
             vehicles = await self.client.vehicles()
+            # An older poll must not overwrite evidence saved with a replacement key.
+            entry = self.config_entry
+            if self._credentials == (entry.data["client_id"], entry.data["client_secret"]):
+                known = vehicle_ids(self.account_id, (vehicle["vin"] for vehicle in vehicles))
+                if entry.data.get("known_vehicle_ids") != known:
+                    self.hass.config_entries.async_update_entry(entry, data=dict(entry.data) | {"known_vehicle_ids": known})
             if self.options["trip_events"]:
                 await self.trips.load()
             await self.trips.load_window()
