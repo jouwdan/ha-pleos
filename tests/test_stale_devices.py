@@ -33,6 +33,8 @@ async def test_user_can_remove_departed_vehicle_through_home_assistant(
         (DOMAIN, account_id(pleos_entry) + "_api"), pleos_entry.entry_id,
     )
     assert vehicle and account
+    before = {entity.unique_id: (entity.entity_id, entity.disabled_by)
+              for entity in er.async_entries_for_device(entities, vehicle.id)}
     client = await hass_ws_client(hass)
     await client.send_json({"id": 1, "type": "config/device_registry/remove", "device_id": vehicle.id})
     assert not (await client.receive_json())["success"]
@@ -54,6 +56,35 @@ async def test_user_can_remove_departed_vehicle_through_home_assistant(
     assert not er.async_entries_for_device(entities, vehicle.id)
     assert registry.async_get(account.id)
     assert not await async_remove_config_entry_device(hass, pleos_entry, account)
+
+    # HA removes the device and its entities without reloading the integration.
+    coordinator = pleos_entry.runtime_data
+    pleos_api["vehicles"].return_value = [CAR]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert pleos_entry.runtime_data is coordinator
+    restored = registry.async_get_device_by_identifier((DOMAIN, car_id), pleos_entry.entry_id)
+    assert restored is not None
+    assert {entity.unique_id: (entity.entity_id, entity.disabled_by)
+            for entity in er.async_entries_for_device(entities, restored.id)} == before
+    assert {entity.domain for entity in er.async_entries_for_device(entities, restored.id)} == {
+        "sensor", "binary_sensor", "device_tracker", "event",
+    }
+    battery = entities.async_get_entity_id("sensor", DOMAIN, car_id + "_batteries_charge_stateofcharge")
+    assert hass.states.get(battery).state == "50"
+
+    # Unrelated device removal cannot clear this account's discovery state.
+    other_entry = MockConfigEntry(domain=DOMAIN, title="Other account")
+    other_entry.add_to_hass(hass)
+    other_device = registry.async_get_or_create(
+        config_entry_id=other_entry.entry_id, identifiers={(DOMAIN, "other-car")},
+    )
+    registry.async_remove_device(other_device.id)
+    await hass.async_block_till_done()
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert {entity.unique_id: (entity.entity_id, entity.disabled_by)
+            for entity in er.async_entries_for_device(entities, restored.id)} == before
 
 
 @pytest.mark.parametrize("error", [

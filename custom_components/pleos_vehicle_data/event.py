@@ -6,7 +6,8 @@ InfluxDB integration hold every trip, including several that arrive in one query
 """
 
 from homeassistant.components.event import EventEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -34,6 +35,14 @@ async def async_setup_entry(
 
     add_new()
     entry.async_on_unload(coordinator.async_add_listener(add_new))
+
+    @callback
+    def device_removed(event: Event[device_registry.EventDeviceRegistryUpdatedData]) -> None:
+        if event.data["action"] != "remove" or event.data["device"]["config_entry_id"] != entry.entry_id:
+            return
+        added.difference_update(car_id for namespace, car_id in event.data["device"]["identifiers"] if namespace == DOMAIN)
+
+    entry.async_on_unload(hass.bus.async_listen(device_registry.EVENT_DEVICE_REGISTRY_UPDATED, device_removed))
 
 
 class TripEvent(CoordinatorEntity[PleosCoordinator], EventEntity):

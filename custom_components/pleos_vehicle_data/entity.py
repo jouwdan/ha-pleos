@@ -6,7 +6,8 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from homeassistant.const import EntityCategory
-from homeassistant.helpers import entity_registry
+from homeassistant.core import Event, callback
+from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -45,6 +46,15 @@ def discover(
 
     add_new()
     entry.async_on_unload(coordinator.async_add_listener(add_new))
+
+    @callback
+    def device_removed(event: Event[device_registry.EventDeviceRegistryUpdatedData]) -> None:
+        if event.data["action"] != "remove" or event.data["device"]["config_entry_id"] != entry.entry_id:
+            return
+        removed = {car_id for namespace, car_id in event.data["device"]["identifiers"] if namespace == DOMAIN}
+        seen.difference_update({item for item in seen if item[0] in removed})
+
+    entry.async_on_unload(coordinator.hass.bus.async_listen(device_registry.EVENT_DEVICE_REGISTRY_UPDATED, device_removed))
 
 
 class VehicleEntity(CoordinatorEntity[PleosCoordinator]):
