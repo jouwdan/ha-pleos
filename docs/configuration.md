@@ -49,6 +49,12 @@ Use the **Pleos Vehicle Data: Refresh** action (`pleos_vehicle_data.refresh`) in
 
 This fetches data already available in Pleos. It cannot wake the car or make it upload new readings, so the returned values may be unchanged.
 
+## Removing a vehicle that left the account
+
+After a successful account refresh confirms a vehicle is no longer listed by Pleos, open its device page and choose **Delete**. This removes that device and its entities; the account and its other vehicles stay configured. Vehicles are never deleted automatically.
+
+Removal is blocked for vehicles still listed, the account API device, unloaded accounts, and failed or malformed account responses. Retry after the connection recovers. Existing recorder history, imported trip statistics and raw archives follow their existing retention policies.
+
 ## Removing the integration
 
 1. Open **Settings → Devices & services → Pleos Vehicle Data**. On the account entry, choose **⋮ → Delete** and confirm. Repeat for other accounts you want to remove.
