@@ -801,6 +801,12 @@
     }
   },
   "exceptions": {
+    "personal_key_rejected": {
+      "message": "Pleos rejected the personal API key. Generate a new key and replace both the Client ID and Client Secret in the reauthentication request."
+    },
+    "account_refresh_failed": {
+      "message": "The Pleos account could not be refreshed. Check your connection and try again later."
+    },
     "entry_not_found": {
       "message": "Config entry {entry_id} was not found."
     },

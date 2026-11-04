@@ -149,12 +149,12 @@ class PleosCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self.last_successful_poll = datetime.now(timezone.utc)
             return result
         except AuthError:
-            raise ConfigEntryAuthFailed("Generate a new Pleos personal API key and replace both credentials") from None
+            raise ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="personal_key_rejected") from None
         except ApiError as error:
             self.using_last_data = bool(self.data) and can_keep_data and (
                 error.status in (0, 429) or 500 <= error.status < 600
             )
-            raise UpdateFailed(str(error)) from None
+            raise UpdateFailed(translation_domain=DOMAIN, translation_key="account_refresh_failed") from None
         finally:
             self._poll_tasks.discard(task)
 
