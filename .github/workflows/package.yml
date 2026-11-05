@@ -1,0 +1,65 @@
+name: Package release
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Package committed integration files
+        run: git archive --format=zip --output=pleos_vehicle_data.zip HEAD:custom_components/pleos_vehicle_data
+      - name: Verify installable ZIP contents and release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          component = Path("custom_components/pleos_vehicle_data")
+          expected = {path.relative_to(component).as_posix(): path.read_bytes()
+                      for path in component.rglob("*") if path.is_file()}
+          with ZipFile("pleos_vehicle_data.zip") as archive:
+              assert archive.testzip() is None
+              actual = {entry.filename: archive.read(entry) for entry in archive.infolist() if not entry.is_dir()}
+          assert actual == expected, "ZIP must contain exactly the integration files at its root"
+          manifest = json.loads(actual["manifest.json"])
+          assert manifest["domain"] == "pleos_vehicle_data"
+          tag = os.environ.get("RELEASE_TAG")
+          assert not tag or tag == "v" + manifest["version"], "Release tag must match manifest version"
+          config = json.loads(Path("hacs.json").read_text())
+          assert config["zip_release"] is True and config["filename"] == "pleos_vehicle_data.zip"
+          print(f"Verified {len(actual)} integration files for version {manifest['version']}")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pleos_vehicle_data
+          path: pleos_vehicle_data.zip
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pleos_vehicle_data
+      - name: Attach ZIP to the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" pleos_vehicle_data.zip

@@ -20,7 +20,7 @@ The integration aims to meet **Home Assistant's Gold quality standards**. This i
 | `docs-actions` | todo | Local [refresh action guide](configuration.md#refresh-on-demand) complete; Core documentation publication pending. |
 | `docs-conditions` | exempt | No custom condition platform. Examples use Home Assistant's built-in conditions. |
 | `docs-high-level-description` | todo | [README](../README.md) explains Pleos and read-only cloud access; Core documentation publication pending. |
-| `docs-installation-instructions` | todo | [Prerequisites and setup](../README.md#before-you-start), [manual installation](configuration.md#install-without-hacs); Core installation documentation pending. |
+| `docs-installation-instructions` | todo | [Prerequisites and setup](../README.md#before-you-start), [manual installation](configuration.md#manual-installation); Core installation documentation pending. |
 | `docs-removal-instructions` | todo | [Removal guide](configuration.md#removing-the-integration), including retained archives; Core documentation publication pending. |
 | `docs-triggers` | exempt | No custom trigger platform. [Trip events](trips.md#trip-event-entity) and [examples](examples.md) use built-in triggers. |
 | `entity-event-setup` | done | [Coordinator entities](../custom_components/pleos_vehicle_data/entity.py) subscribe through HA's lifecycle; platform listeners use entry unload callbacks; [lifecycle tests](../tests/test_lifecycle.py). |

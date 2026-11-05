@@ -4,6 +4,18 @@
 
 Read the notes for each version you are crossing, including the native entity sections when upgrading from 0.6.0 or earlier. Restart Home Assistant after updating.
 
+## Updating with Marketplace
+
+On Home Assistant 2026.11 and later, integration updates appear under **Settings → Updates**. Install the Pleos Vehicle Data update, then restart Home Assistant using the restart repair or the normal restart controls. Fresh Marketplace installations open account setup directly without a restart; updates still require one.
+
+When upgrading Home Assistant from an earlier version with HACS installed, Marketplace migrates your installed content, custom repositories and update entities automatically. Keep your existing Pleos account entries; no reinstall or account setup is needed. See [Home Assistant's migration guide](https://www.home-assistant.io/integrations/marketplace/#coming-from-hacs).
+
+## Marketplace release packaging in 1.0.1
+
+Marketplace now installs the `pleos_vehicle_data.zip` asset attached to each release. The ZIP contains the same integration files, with no changes to account data, entity IDs, settings or history. Restart after updating as usual.
+
+Marketplace's download count comes from the release asset's GitHub download count. It includes updates and repeat downloads; it is not a unique-user or active-installation count. Older source-archive downloads cannot be recovered, so the count starts with the new release assets.
+
 ## Stable release 1.0.0: vehicle evidence and legacy translations
 
 Duplicate-vehicle checks retain account-scoped vehicle hashes from accepted setup and credential replacement. This closes the gap where a new entry's first setup fails before its devices are registered. Successful vehicle-list requests update the saved list; API failures retain it, and a successful empty response clears it. Existing entries acquire the metadata on their next successful request. No account namespace, entity ID, user option or history migration is required.

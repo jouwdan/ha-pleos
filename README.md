@@ -2,7 +2,7 @@
 
 [![Validate](https://github.com/jouwdan/ha-pleos/actions/workflows/validate.yml/badge.svg)](https://github.com/jouwdan/ha-pleos/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/jouwdan/ha-pleos)](https://github.com/jouwdan/ha-pleos/releases/latest)
-[![Available in HACS](https://img.shields.io/badge/HACS-Default-41BDF5)](https://www.hacs.xyz/)
+[![Available in Marketplace](https://img.shields.io/badge/Marketplace-Available-41BDF5)](#install-with-marketplace)
 
 Bring your Hyundai, Kia or Genesis vehicle into Home Assistant using the official Pleos **personal Vehicle Data API**. Each car gets its own device, with entities you can use in dashboards and automations. Multiple accounts are supported.
 
@@ -28,19 +28,25 @@ You need:
 - A supported European Hyundai, Kia or Genesis vehicle with active connected services. See [supported vehicles](docs/supported-vehicles.md).
 - The vehicle's **primary user** account to generate a personal API key. A shared or secondary app user cannot authorise access, even if they can see the car in the app.
 
-## Install with HACS
+<a id="install-with-hacs"></a>
 
-1. [Install HACS](https://www.hacs.dev/docs/use/download/download/) if you do not already have it.
-2. Open **HACS** and search for **Pleos Vehicle Data**.
-3. Open the result, choose **Download**, then restart Home Assistant.
+## Install with Marketplace
 
-Prefer to install manually? Follow [Install without HACS](docs/configuration.md#install-without-hacs).
+The [Marketplace](https://www.home-assistant.io/integrations/marketplace/) is built into **Home Assistant 2026.11 and later**; no separate store installation is needed.
+
+1. As an administrator, open **Settings → Marketplace** and accept its first-use notice if prompted.
+2. Search for **Pleos Vehicle Data** and open its page.
+3. Choose **Install**, review the version, then confirm **Install**. Account setup opens when installation finishes; continue with [Set up your account](#set-up-your-account). A fresh installation does not need a restart.
+
+Existing HACS installations migrate automatically when you upgrade Home Assistant to 2026.11. Your installed integration and updates carry over; you do not need to reinstall it.
+
+Prefer to install manually? Follow [Manual installation](docs/configuration.md#manual-installation), also available on Home Assistant 2026.10.
 
 ## Set up your account
 
 1. Sign into [Pleos Playground](https://pleos.ai/) and open the account menu → **My Vehicle Data API**. This menu is available to users in Europe.
 2. Select your manufacturer, accept the terms, choose **Get API Key**, and sign into the primary user's manufacturer account. Copy the **Client ID** and **Client Secret**. Use the personal API key; you do not need a business project or API-access approval. [Official key-generation guide](https://document.pleos.ai/en/api-reference/vehicle-data-api/getting-started/for-private-users/request-my-vehicle-api-key).
-3. In Home Assistant, open **Settings → Devices & services → Add integration → Pleos Vehicle Data**. Select the same manufacturer and enter both credentials.
+3. In the setup flow opened by Marketplace, select the same manufacturer and enter both credentials. If setup is not already open, go to **Settings → Devices & services → Add integration → Pleos Vehicle Data**.
 4. On **Odometer**, select only cars whose kilometre reading is incorrectly labelled as miles by Pleos. Leave empty if the units are correct or you are unsure. Home Assistant handles your normal km/miles display preference. [Odometer setup](docs/configuration.md#odometer-setup).
 5. Open your vehicle's device page and add its entities to your dashboards or automations. Repeat setup to add another account.
 

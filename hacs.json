@@ -1,5 +1,7 @@
 {
   "name": "Pleos Vehicle Data",
+  "zip_release": true,
+  "filename": "pleos_vehicle_data.zip",
   "homeassistant": "2026.10.0",
   "render_readme": true,
   "country": ["AT", "BE", "BA", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "GE", "DE", "GR", "HU", "IS", "IE", "IT", "MD", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "SK", "SI", "ES", "SE", "CH", "GB", "UA"]
