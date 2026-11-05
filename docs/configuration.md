@@ -6,9 +6,11 @@
 
 ## Manual installation
 
-1. Download the source ZIP from the [latest release](https://github.com/jouwdan/ha-pleos/releases/latest).
-2. Extract it and copy `custom_components/pleos_vehicle_data` into your Home Assistant configuration directory's `custom_components` folder. The result must be `<config>/custom_components/pleos_vehicle_data/manifest.json`.
+1. Download `pleos_vehicle_data.zip` from the [latest release](https://github.com/jouwdan/ha-pleos/releases/latest).
+2. Create `<config>/custom_components/pleos_vehicle_data` in your Home Assistant configuration directory and extract the ZIP's contents directly into it. The result must be `<config>/custom_components/pleos_vehicle_data/manifest.json`.
 3. Restart Home Assistant and complete [account setup](../README.md#set-up-your-account). For updates, replace that integration directory with the new release and restart.
+
+For older releases that only offer a source ZIP, extract it and copy its `custom_components/pleos_vehicle_data` directory into `<config>/custom_components` instead.
 
 ## Odometer setup
 

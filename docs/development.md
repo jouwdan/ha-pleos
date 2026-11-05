@@ -95,7 +95,9 @@ Release checklist:
 1. Review any library changes and require passing library CI. Publish those changes from their own repositories, then verify the PyPI wheels, source distributions and fresh installations.
 2. Update the integration's dependency pins as needed and require passing hosted CI, including HA 2026.10.0/2026.10.4, HACS and Hassfest. Merge the reviewed integration code without publishing it yet.
 3. Test a clean installation and upgrade, preserving the invariants listed here. Pilot the candidate through a drive, charging, parked reports, restart, manual refresh and recovery; record any untested scenarios. Automated synthetic responses do not replace this pilot.
-4. Update the integration version and [upgrade notes](upgrading.md), then publish the tested commit with a matching `v<version>` tag and GitHub Release. GitHub Releases in this repository belong to the integration and are consumed by Marketplace. The existing repository layout needs no custom ZIP.
+4. Update the integration version and [upgrade notes](upgrading.md), then publish the tested commit with a matching `v<version>` tag and GitHub Release. GitHub Releases in this repository belong to the integration and are consumed by Marketplace. The [packaging workflow](../.github/workflows/package.yml) verifies an installable `pleos_vehicle_data.zip` on every push/PR and attaches it when a release is published. Wait for that workflow to pass and verify the asset before announcing the release. Keep the filename aligned with `hacs.json`; the ZIP's root contains `manifest.json`, not a surrounding directory.
+
+The release asset enables Marketplace's download counter. It counts GitHub asset downloads for a release, including updates and repeat downloads, rather than unique users. Source-archive downloads from older releases are not available as a historical baseline. Packaging adds no telemetry to the integration.
 
 For a merged candidate, validation can also be started with:
 
