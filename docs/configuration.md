@@ -2,7 +2,9 @@
 
 [Back to setup guide](../README.md)
 
-## Install without HACS
+<a id="install-without-hacs"></a>
+
+## Manual installation
 
 1. Download the source ZIP from the [latest release](https://github.com/jouwdan/ha-pleos/releases/latest).
 2. Extract it and copy `custom_components/pleos_vehicle_data` into your Home Assistant configuration directory's `custom_components` folder. The result must be `<config>/custom_components/pleos_vehicle_data/manifest.json`.
@@ -67,7 +69,7 @@ Removal is blocked for vehicles still listed, the account API device, unloaded a
 2. Removing an account deletes its saved ranges and tyre pressures, EV-consumption totals and checkpoints, trip tracking and imported trip statistics. Export anything you need first. Ordinary entity history follows Home Assistant's recorder retention policy.
 3. Raw archive files remain in `<config>/pleos_vehicle_data/archive/`. Delete the relevant account folder yourself if you no longer want it; keep folders belonging to accounts you still use.
 4. If you no longer use the personal API key elsewhere, revoke it in Pleos Playground's **My Vehicle Data API** key-management page. Also revoke a separate geocoding-provider key if you no longer use it.
-5. After removing all accounts, uninstall **Pleos Vehicle Data** through HACS and restart Home Assistant. For a manual installation, remove `<config>/custom_components/pleos_vehicle_data` and restart instead.
+5. After removing all accounts, open **Settings → Marketplace**, find **Pleos Vehicle Data** under **Installed**, then choose **⋮ → Uninstall** and confirm. Restart Home Assistant if prompted by the repair. For a manual installation, remove `<config>/custom_components/pleos_vehicle_data` and restart instead.
 
 To replace credentials or temporarily stop polling, use reconfiguration or disable the account; deleting and adding it again creates a new account namespace and does not restore its derived totals.
 

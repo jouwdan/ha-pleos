@@ -95,7 +95,7 @@ Release checklist:
 1. Review any library changes and require passing library CI. Publish those changes from their own repositories, then verify the PyPI wheels, source distributions and fresh installations.
 2. Update the integration's dependency pins as needed and require passing hosted CI, including HA 2026.10.0/2026.10.4, HACS and Hassfest. Merge the reviewed integration code without publishing it yet.
 3. Test a clean installation and upgrade, preserving the invariants listed here. Pilot the candidate through a drive, charging, parked reports, restart, manual refresh and recovery; record any untested scenarios. Automated synthetic responses do not replace this pilot.
-4. Update the integration version and [upgrade notes](upgrading.md), then publish the tested commit with a matching `v<version>` tag and GitHub Release. GitHub Releases in this repository belong to the integration and are consumed by HACS. The existing repository layout needs no custom ZIP.
+4. Update the integration version and [upgrade notes](upgrading.md), then publish the tested commit with a matching `v<version>` tag and GitHub Release. GitHub Releases in this repository belong to the integration and are consumed by Marketplace. The existing repository layout needs no custom ZIP.
 
 For a merged candidate, validation can also be started with:
 
