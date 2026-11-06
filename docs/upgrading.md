@@ -10,6 +10,10 @@ On Home Assistant 2026.11 and later, integration updates appear under **Settings
 
 When upgrading Home Assistant from an earlier version with HACS installed, Marketplace migrates your installed content, custom repositories and update entities automatically. Keep your existing Pleos account entries; no reinstall or account setup is needed. See [Home Assistant's migration guide](https://www.home-assistant.io/integrations/marketplace/#coming-from-hacs).
 
+## Recorder upgrade clarification in 1.0.2
+
+This release clarifies the intentional statistics classifications introduced in 0.8.0 and the `state_class_removed` Recorder repair that can appear for previously compiled statistics. See [the 0.8.0 upgrade notes](#native-entities-and-upgrading-to-080). Sensor behavior, entity IDs, settings and stored data are unchanged; installing 1.0.2 does not automatically dismiss existing Recorder repairs. Restart after updating as usual.
+
 ## Marketplace release packaging in 1.0.1
 
 Marketplace now installs the `pleos_vehicle_data.zip` asset attached to each release. The ZIP contains the same integration files, with no changes to account data, entity IDs, settings or history. Restart after updating as usual.
