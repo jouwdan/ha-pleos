@@ -10,6 +10,19 @@ On Home Assistant 2026.11 and later, integration updates appear under **Settings
 
 When upgrading Home Assistant from an earlier version with HACS installed, Marketplace migrates your installed content, custom repositories and update entities automatically. Keep your existing Pleos account entries; no reinstall or account setup is needed. See [Home Assistant's migration guide](https://www.home-assistant.io/integrations/marketplace/#coming-from-hacs).
 
+## Readings that became binary sensors keep their settings and history
+
+0.7.0 and 0.8.0 moved 18 readings from `sensor.*` to `binary_sensor.*`; see [On/off readings](#onoff-readings-and-upgrading-to-070) and [Native entities](#native-entities-and-upgrading-to-080). Upgrading from 0.6.0 or earlier now carries each old sensor over to its binary sensor when the binary sensor is first created:
+
+- The entity ID keeps its object ID: `sensor.ev6_ignition` becomes `binary_sensor.ev6_ignition`, including a custom ID such as `sensor.my_ignition` → `binary_sensor.my_ignition`. If that ID is already taken, Home Assistant adds a suffix such as `_2`.
+- Custom name, icon, area, labels, categories, voice assistant aliases and exposure, and disabled or hidden settings move to the binary sensor. Sensor display options do not apply and are dropped.
+- The Recorder history moves too, so history graphs and the logbook continue under the new ID. States recorded before the change keep their original values; for bonnet, boot and sunroof these are `open` and `closed` rather than `on` and `off`.
+- The old sensor entry is removed instead of remaining unavailable.
+
+Dashboards, automations and scripts still refer to `sensor.*` IDs and need updating. History already exported elsewhere, for example through the InfluxDB integration, is not rewritten; the object ID stays the same and only the domain changes.
+
+Nothing is moved if the binary sensor already exists, because both entities then have their own settings and history. This applies if you upgraded to 0.7.0 or later before this change: reapply settings to the binary sensors and remove the old unavailable sensors after updating their references.
+
 ## Marketplace release packaging in 1.0.1
 
 Marketplace now installs the `pleos_vehicle_data.zip` asset attached to each release. The ZIP contains the same integration files, with no changes to account data, entity IDs, settings or history. Restart after updating as usual.
@@ -114,7 +127,7 @@ The sensor appears after a usable matched report and starts unknown until at lea
 
 ## Native entities and upgrading to 0.8.0
 
-**Bonnet**, **Boot** and **Sunroof** are now open/closed binary sensors. Bonnet and boot use Home Assistant's `opening` device class; sunroof uses `window`. Update references from `sensor.<car>_bonnet`, `sensor.<car>_boot` and `sensor.<car>_sunroof` to their new `binary_sensor.*` IDs after updating and restarting Home Assistant. As with the 0.7.0 conversions, reapply customisations to the new entities; old entries and history are not automatically deleted or moved. Their raw states are now `on` (open) and `off` (closed).
+**Bonnet**, **Boot** and **Sunroof** are now open/closed binary sensors. Bonnet and boot use Home Assistant's `opening` device class; sunroof uses `window`. Update references from `sensor.<car>_bonnet`, `sensor.<car>_boot` and `sensor.<car>_sunroof` to their new `binary_sensor.*` IDs after updating and restarting Home Assistant. Settings and history move with them when you upgrade from 0.6.0 or earlier; see [readings that became binary sensors](#readings-that-became-binary-sensors-keep-their-settings-and-history). Their raw states are now `on` (open) and `off` (closed).
 
 Doors, seat heating/ventilation levels, climate mode and detailed charging status are **enum sensors** with predefined states and translated display labels. Their entity IDs stay the same. Door states retain `open`, `closed` and `locked`; seat levels retain `off`, `low`, `middle` and `high`; climate mode retains `manual`, `auto`, `off` and `error`. Unknown values become unavailable instead of being interpreted as off or closed.
 
@@ -139,7 +152,7 @@ The existing **Warnings** sensor still keeps the full list and count, including 
 
 **Cabin fan speed** keeps its entity ID but becomes an enum: numeric `-1` becomes `auto`, `0` becomes `off`, and `1`–`8` become `level_1`–`level_8`. Update numeric state comparisons. Display labels are Auto, Off and Level 1–8.
 
-Six **(last trip)** readings also move from `sensor.*` to `binary_sensor.*`: **Ignition**, **Driver door**, **Front passenger door**, **Rear left door**, **Rear right door** and **Low fuel warning**. Their suffix remains `_last_trip`; for example, `sensor.<car>_driver_door_last_trip` becomes `binary_sensor.<car>_driver_door_last_trip`. Doors use `on` for open and `off` for closed; ignition and the warning use `on` for active. Reapply customisations and update references as for bonnet/boot/sunroof. These are historical samples, not current vehicle status.
+Six **(last trip)** readings also move from `sensor.*` to `binary_sensor.*`: **Ignition**, **Driver door**, **Front passenger door**, **Rear left door**, **Rear right door** and **Low fuel warning**. Their suffix remains `_last_trip`; for example, `sensor.<car>_driver_door_last_trip` becomes `binary_sensor.<car>_driver_door_last_trip`. Doors use `on` for open and `off` for closed; ignition and the warning use `on` for active. Their settings and history move as for bonnet/boot/sunroof; update references. These are historical samples, not current vehicle status.
 
 Last-trip **Gear**, **Seat belts**, **Speed limit assist settings**, **Exterior light setting**, **Speed unit** and **Tyre pressure unit** become enums while keeping their IDs. Gear raw states remain `p`, `r`, `n`, `d`, displayed as Park, Reverse, Neutral, Drive. Seat belts retain `belted`/`unbelted`; an unfastened belt does not establish occupancy or danger. Light-setting raw states change: `lightSwOff` → `off`, `tailSwOn` → `tail_lights`, `headLampLowSwOn` → `headlamps`, `autoLightSwOn` → `auto`. The **Trip** event's text attributes and raw trip events retain their original API values.
 
@@ -157,6 +170,6 @@ Ignition, ignition power, high-voltage system power, accessory power, sleep mode
 
 **Upgrading from 0.6.0 or earlier:** these nine readings move from `sensor.*` to `binary_sensor.*`. After updating and restarting Home Assistant, find their new entity IDs on the vehicle's device page and update dashboard cards, automations and scripts that use the old IDs. For example, `sensor.ev6_ignition` becomes `binary_sensor.ev6_ignition` with the default names. In a picture-elements `state-icon`, use the new entity and `state_color: true`.
 
-Home Assistant registers these as new entities. Custom entity IDs, names, icons, areas and disabled/hidden settings on the old sensors are not copied; reapply the settings you need. Old sensor entries may remain unavailable and can be removed after you update their references. Existing history is not moved to the new entities. The [example dashboard](../examples/dashboard.yaml) uses the new IDs.
+When upgrading from 0.6.0 or earlier, custom entity IDs, names, icons, areas, disabled/hidden settings and history move to the binary sensors, and the old sensor entries are removed; see [readings that became binary sensors](#readings-that-became-binary-sensors-keep-their-settings-and-history). The [example dashboard](../examples/dashboard.yaml) uses the new IDs.
 
 The 0.7.0 release left other text readings unchanged; 0.8.0 extends those conversions.
