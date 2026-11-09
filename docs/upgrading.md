@@ -12,12 +12,16 @@ When upgrading Home Assistant from an earlier version with HACS installed, Marke
 
 ## Readings that became binary sensors keep their settings and history
 
-0.7.0 and 0.8.0 moved 18 readings from `sensor.*` to `binary_sensor.*`; see [On/off readings](#onoff-readings-and-upgrading-to-070) and [Native entities](#native-entities-and-upgrading-to-080). Upgrading from 0.6.0 or earlier now carries each old sensor over to its binary sensor when the binary sensor is first created:
+Starting in 1.0.2, direct upgrades from 0.6.0 or earlier preserve settings and history for readings that became binary sensors. Restart Home Assistant after updating.
+
+0.7.0 and 0.8.0 moved 18 readings from `sensor.*` to `binary_sensor.*`; see [On/off readings](#onoff-readings-and-upgrading-to-070) and [Native entities](#native-entities-and-upgrading-to-080). Each old sensor is carried over when its binary sensor is first created:
 
 - The entity ID keeps its object ID: `sensor.ev6_ignition` becomes `binary_sensor.ev6_ignition`, including a custom ID such as `sensor.my_ignition` → `binary_sensor.my_ignition`. If that ID is already taken, Home Assistant adds a suffix such as `_2`.
 - Custom name, icon, area, labels, categories, voice assistant aliases and exposure, and disabled or hidden settings move to the binary sensor. Sensor display options do not apply and are dropped.
 - The Recorder history moves too, so history graphs and the logbook continue under the new ID. States recorded before the change keep their original values; for bonnet, boot and sunroof these are `open` and `closed` rather than `on` and `off`.
 - The old sensor entry is removed instead of remaining unavailable.
+
+If the destination entity ID already has Recorder history, Home Assistant logs a warning and leaves the two histories separate. It does not overwrite or combine them. Without Recorder, only registry settings move.
 
 Dashboards, automations and scripts still refer to `sensor.*` IDs and need updating. History already exported elsewhere, for example through the InfluxDB integration, is not rewritten; the object ID stays the same and only the domain changes.
 
