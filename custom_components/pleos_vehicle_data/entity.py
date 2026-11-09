@@ -16,6 +16,7 @@ from .const import BRANDS, DOMAIN
 from .coordinator import PleosCoordinator
 from .data import identifier, reported_age
 from .economy import ECONOMY_KEY
+from .migration import migrate_to_binary_sensor
 from .models import PleosConfigEntry, Reading, VehicleState
 from .names import DISABLED_DIAGNOSTICS, ENTITY_NAMES, NUMBERED_RANGE_NAMES, entity_translation_key
 
@@ -34,6 +35,8 @@ def discover(
             items: dict[str, Reading] = {"location": {"name": "Location", "source": "locations"}} if domain == "device_tracker" and car["location"] else car["readings"] if domain != "device_tracker" else {}
             for key, spec in items.items():
                 if (domain == "device_tracker" or spec["domain"] == domain) and (car_id, key) not in seen:
+                    if domain == "binary_sensor":
+                        migrate_to_binary_sensor(coordinator.hass, entry, car_id + "_" + key)
                     if entity_translation_key(domain, key) is None:
                         registered_id = registry.async_get_entity_id(domain, DOMAIN, car_id + "_" + key)
                         registered = registry.async_get(registered_id) if registered_id else None
