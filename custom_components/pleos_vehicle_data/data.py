@@ -422,6 +422,12 @@ def readings(
         result[key] = normalized
 
     walk(data)
+    remaining = result.get("batteries_charge_remaintime")
+    plug = result.get("batteries_charge_plugin")
+    # Pleos keeps sending the last estimate after unplugging; it no longer describes anything.
+    if remaining and plug and plug["value"] == "OFF":
+        remaining["attributes"] = remaining.get("attributes", {}) | {"raw_value": remaining["value"]}
+        remaining["value"] = None
     return result
 
 

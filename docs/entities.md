@@ -62,6 +62,8 @@ These remain read-only entities. The API does not support operating locks, windo
 
 **Battery level** is the primary charge percentage. When it has a valid reported timestamp, the separate **Traction battery level** reading from the powertrain endpoint appears under **Diagnostics**. If Battery level is missing or invalid, Traction battery level returns to the main sensor section. Both keep their own values, source timestamps, entity IDs and history; neither is a 12 V battery reading. Retained readings still follow the freshness rules below.
 
+**Charge time remaining** is unknown while the same battery report says the plug is disconnected, because Pleos keeps sending the last estimate after unplugging. The reported minutes stay available in its `raw_value` attribute. Without a valid plug state the estimate is shown as reported.
+
 Pure EVs do not get **Low fuel warning** or **Engine oil warning** entities. Hybrid, combustion and unknown vehicle types keep them; **Brake fluid warning** remains relevant to EVs. The **Warnings** sensor and raw API diagnostics always preserve the complete reported warning list, including unexpected codes. **Key battery warning** displays Low when reported and Normal when absent from a valid list; missing or invalid warning data is unknown, and a failed status request makes current warning entities unavailable.
 
 ## Optional address sensor
