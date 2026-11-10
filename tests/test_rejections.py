@@ -18,16 +18,19 @@ class SnapshotRejectionTests(unittest.TestCase):
 
     def test_each_kind_of_rejection_has_a_reason(self):
         cases = [
-            ("batteries", {"charge": {"stateOfCharge": 101}}, "charge.stateOfCharge", 101, "expected 0 to 100"),
+            ("batteries", {"charge": {"stateOfCharge": 101}}, "charge.stateOfCharge", 101, "expected 0 to 100, got 101"),
             ("status", {"tire": [{"left": 30, "unit": "furlong"}]}, "tire.row1.left", 30,
              "expected 0 to 254 in psi/kpa/bar, got unit furlong"),
             ("status", {"climateControl": {"speed": 2.5}}, "climateControl.speed", 2.5,
-             "expected -1 to 8 as a whole number"),
+             "expected -1 to 8 as a whole number, got 2.5"),
             ("batteries", {"charge": {"plugin": "maybe"}}, "charge.plugin", "maybe", "expected connected or disconnected"),
             ("status", {"hood": "x" * 300}, "hood", "x" * 100 + "…", "text longer than 255 characters"),
             ("status", {"odd": {"unit": 5, "value": 1}}, "odd.unit", 5, "unit is not text"),
             ("status", {"warnings": ["a", 1]}, "warnings", ["a", 1], "warnings must all be text"),
             ("status", {"hood": float("inf")}, "hood", "inf", "not a finite number"),
+            # The value is the problem here, not the accepted unit it came with.
+            ("powertrains", {"distanceToEmpties": [{"type": "EV", "value": "-", "unit": "km"}]},
+             "distanceToEmpties.EV", "-", "expected 1 to 4095 in feet/km/meter/mile/miles, got '-'"),
         ]
         for endpoint, payload, path, value, reason in cases:
             with self.subTest(path=path):
@@ -89,7 +92,7 @@ class TripRejectionTests(unittest.TestCase):
         self.assertEqual([(e["path"], e["value"]) for e in rejections.examples], [("engine.rpm", 99999)])
         speed = Rejections("speed")
         trip_readings("speed", {"trips": [trip]}, speed)
-        self.assertEqual(speed.examples[0]["reason"], "expected 0 to 254 in kph/mph")
+        self.assertEqual(speed.examples[0]["reason"], "expected 0 to 254 in kph/mph, got unit furlongs")
 
 
 class DiagnosticSensorTests(HomeAssistantTestCase):
