@@ -190,12 +190,26 @@ class Spec:
             value = self.convert(value, raw_unit)
         return self.options[cast(int, value)] if self.options else value
 
-    def describe(self) -> str:
-        """The rule a rejected value broke, for logs and diagnostics."""
+    def describe(self, value: object, raw_unit: str | None) -> str:
+        """The rule a value dropped by check() broke and what broke it, for logs and diagnostics."""
         text = f"expected {self.low} to {self.high}"
         if self.units is not None:
             text += " in " + "/".join(unit if unit is not None else "unspecified" for unit in self.units)
-        return text + (" as a whole number" if self.integer else "")
+        text += " as a whole number" if self.integer else ""
+        number = value
+        if self.numeric_text and isinstance(value, str):
+            try:
+                number = float(value)
+            except ValueError:
+                return f"{text}, value is not numeric"
+        # Name the first failing check, in the order check() applies them.
+        if not finite_number(number):
+            return f"{text}, value is not a finite number"
+        if not self.low <= number <= self.high:
+            return f"{text}, value is outside the allowed range"
+        if self.units is not None and raw_unit not in self.units:
+            return f"{text}, got unit {raw_unit if raw_unit is not None else 'unspecified'}"
+        return f"{text}, value is not a whole number"
 
     def metadata(self) -> Reading:
         if self.options:
@@ -358,7 +372,7 @@ def readings(
         if spec:
             raw, value = value, spec.check(value, unit)
             if value is None:
-                reject(path, raw, spec.describe() + (f", got unit {unit}" if unit else ""))
+                reject(path, raw, spec.describe(raw, unit))
                 return
         numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
         if numeric and not finite_number(value):
@@ -605,10 +619,13 @@ def trip_readings(
     def numeric_sample(field: str, spec: Spec, index: int) -> tuple[float, str | None] | None:
         """Return one valid sample as (value, unit), converted like the last-sample sensor."""
         values = samples(field)
-        units = samples(spec.unit_field) if spec.unit_field else []
-        raw_unit = units[index] if spec.unit_field and 0 <= index < len(units) else None
+        raw_unit = sample_unit(spec, index)
         value = spec.check(values[index] if 0 <= index < len(values) else None, raw_unit)
         return None if value is None else (cast(float, value), spec.unit or (UNITS.get(raw_unit) if isinstance(raw_unit, str) else None))
+
+    def sample_unit(spec: Spec, index: int) -> str | None:
+        units = samples(spec.unit_field) if spec.unit_field else []
+        return units[index] if spec.unit_field and 0 <= index < len(units) else None
 
     for field, spec in TRIP_FIELDS[endpoint].items():
         values = samples(field)
@@ -644,7 +661,8 @@ def trip_readings(
         else:
             last = numeric_sample(field, spec, index)
             if last is None:
-                reject(field, value if isinstance(value, (str, int, float, bool)) else repr(value)[:100], spec.describe())
+                reject(field, value if isinstance(value, (str, int, float, bool)) else repr(value)[:100],
+                       spec.describe(value, sample_unit(spec, index)))
                 continue
             reading["value"], unit = last
             # Summarise every valid sample of the trip in the last sample's unit.
