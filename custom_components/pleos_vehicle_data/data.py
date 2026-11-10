@@ -201,13 +201,15 @@ class Spec:
             try:
                 number = float(value)
             except ValueError:
-                pass
+                return f"{text}, value is not numeric"
         # Name the first failing check, in the order check() applies them.
-        if isinstance(number, bool) or not finite_number(number) or not self.low <= number <= self.high:
-            return f"{text}, got {value!r}"
+        if not finite_number(number):
+            return f"{text}, value is not a finite number"
+        if not self.low <= number <= self.high:
+            return f"{text}, value is outside the allowed range"
         if self.units is not None and raw_unit not in self.units:
             return f"{text}, got unit {raw_unit if raw_unit is not None else 'unspecified'}"
-        return f"{text}, got {value!r}"
+        return f"{text}, value is not a whole number"
 
     def metadata(self) -> Reading:
         if self.options:
