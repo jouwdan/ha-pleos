@@ -80,6 +80,17 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(readings("batteries", {"charge": {"stateOfCharge": 101, "remainTime": 65536, "batteryCapacity": float("nan")}}, "EV"), {})
         self.assertEqual(readings("batteries", {"charge": {"remainTime": 65535}}, "EV")["batteries_charge_remaintime"]["value"], 65535)
 
+    def test_charge_time_is_unknown_while_unplugged(self):
+        unplugged = readings("batteries", {"charge": {"plugin": "disconnected", "remainTime": 95}}, "EV")
+        self.assertIsNone(unplugged["batteries_charge_remaintime"]["value"])
+        self.assertEqual(unplugged["batteries_charge_remaintime"]["attributes"], {"raw_value": 95})
+        plugged = readings("batteries", {"charge": {"plugin": "connected", "remainTime": 95}}, "EV")
+        self.assertEqual(plugged["batteries_charge_remaintime"]["value"], 95)
+        self.assertNotIn("attributes", plugged["batteries_charge_remaintime"])
+        # Without a valid plug state the estimate is kept as reported.
+        for charge in ({"remainTime": 95}, {"plugin": "maybe", "remainTime": 95}):
+            self.assertEqual(readings("batteries", {"charge": charge}, "EV")["batteries_charge_remaintime"]["value"], 95)
+
     def test_zero_false_and_tyre_units(self):
         sample = readings("batteries", {"charge": {"stateOfCharge": 0, "charging": False, "plugin": "disconnected"}}, "EV")
         self.assertEqual(sample["batteries_charge_stateofcharge"]["value"], 0)
