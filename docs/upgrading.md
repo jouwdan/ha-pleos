@@ -10,6 +10,12 @@ On Home Assistant 2026.11 and later, integration updates appear under **Settings
 
 When upgrading Home Assistant from an earlier version with HACS installed, Marketplace migrates your installed content, custom repositories and update entities automatically. Keep your existing Pleos account entries; no reinstall or account setup is needed. See [Home Assistant's migration guide](https://www.home-assistant.io/integrations/marketplace/#coming-from-hacs).
 
+## Charge estimates and clearer diagnostics in 1.0.3
+
+API diagnostic sensors and debug logs now distinguish an invalid value, an unsupported unit and a non-whole number. Rejected raw values are not copied into the explanation text. Accepted readings and range parsing rules are unchanged; this improves diagnosis of missing readings and does not restore unavailable range data. Restart Home Assistant after updating.
+
+**Charge time remaining** is now unknown when the same battery report says the plug is disconnected. The reported estimate remains in `raw_value`. A connected, missing or invalid plug state keeps the reported estimate as before. Existing history is not rewritten; entity IDs, account data and dependency versions are unchanged.
+
 ## Readings that became binary sensors keep their settings and history
 
 Starting in 1.0.2, direct upgrades from 0.6.0 or earlier preserve settings and history for readings that became binary sensors. Restart Home Assistant after updating.
